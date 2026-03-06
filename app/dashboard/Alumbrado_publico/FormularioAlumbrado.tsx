@@ -215,13 +215,13 @@ useEffect(() => {
   const [printSigs, setPrintSigs] = useState<PrintSigs>({ topografo: null, cliente: null });
 
   const tramosPorSector: Record<string, string[]> = {
-    "Barra de coyuca": ["Sendero seguro", "Barra coyuca"],
+    "Barra de coyuca": ["Sendero seguro-Barra coyuca"],
     "Pie cuesta": ["Sendero seguro", "Pie cuesta"],
     "Barrios historicos": ["Caleta-caletilla", "Sendero", "Costera-antigua", "Corredor Zocalo-quebrada", "Corredor zocalo-fuerte"],
     "Aca. Tradicional": ["Sendero Tadeo arredondo", "Sendero cinerio-hornitos", "Michoacan", "Av. Universidad", "Dr. Ignacio chavez", "Costa Azul"],
-    "Acapulco dorado": [""],
+    "Acapulco dorado": ["Costa azul"],
     "Las brisas": [""],
-    "Puerto marquez": [""],
+    "Puerto marquez": ["Sendero-Puerto marquez"],
     "Diamante": ["Sendero Puerto marquez", "Av. Costera Palmas"],
     "Otro": [""]
   };
