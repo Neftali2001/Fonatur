@@ -11,21 +11,20 @@ import SignatureCanvas from 'react-signature-canvas';
 import jsPDF from "jspdf";
 
 import 'leaflet/dist/leaflet.css';
-import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
+// import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
+import dynamic from 'next/dynamic';
+const LeafletMap = dynamic(
+  () => import('@/app/dashboard/Alumbrado_publico/LeafletMap'),
+  { ssr: false }
+)
 
 import autoTable from "jspdf-autotable";
-import L from 'leaflet';
 import html2canvas from "html2canvas";
 import { useRouter } from 'next/navigation';
 import { crearReporte } from '@/app/lib/actions';
 
 // Solución para evitar el error de iconos por defecto de Leaflet en TypeScript
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-});
+
 
 // ================= INTERFACES =================
 interface GpsCoords {
@@ -85,22 +84,57 @@ interface PrintSigs {
   cliente: string | null;
 }
 
-// ================= COMPONENTES ANIDADOS =================
-const RecenterMap: React.FC<{ coords: GpsCoords }> = ({ coords }) => {
-  const map = useMap();
-  useEffect(() => {
-    if (coords.lat && coords.lon) {
-      map.setView([parseFloat(coords.lat), parseFloat(coords.lon)], 16);
-    }
-  }, [coords, map]);
-  return null;
-};
+
+
+
+
+
+
+
+
 
 // ================= COMPONENTE PRINCIPAL =================
 const TopographyForm: React.FC = () => {
   const router = useRouter();
   const mapRef = useRef<HTMLDivElement>(null);
-  
+  const [currentTime, setCurrentTime] = useState('');
+
+  useEffect(() => {
+  const loadLeaflet = async () => {
+    const L = await import('leaflet');
+
+    delete (L.Icon.Default.prototype as any)._getIconUrl;
+
+    L.Icon.Default.mergeOptions({
+      iconRetinaUrl:
+        "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png",
+      iconUrl:
+        "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png",
+      shadowUrl:
+        "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
+    });
+  };
+
+  loadLeaflet();
+}, []);
+
+
+
+useEffect(() => {
+  const updateTime = () => {
+    const now = new Date();
+    setCurrentTime(
+      now.toLocaleString('es-MX', {
+        hour12: false,
+      })
+    );
+  };
+
+  updateTime();
+  const interval = setInterval(updateTime, 1000);
+
+  return () => clearInterval(interval);
+}, []);
   
   const [formData, setFormData] = useState<FormData>({
     proyecto: 'Levantamiento Topográfico para playas...',
@@ -460,7 +494,7 @@ const TopographyForm: React.FC = () => {
               </div>
 
               <div className="text-right text-sm font-mono bg-white/10 px-4 py-2 rounded-xl">
-                {new Date().toLocaleString()}
+               {currentTime}
               </div>
             </div>
           </header>
@@ -589,31 +623,9 @@ const TopographyForm: React.FC = () => {
                 </h2>
               </div>
 
-              <div ref={mapRef} className="h-64">
-                {gps.lat ? (
-                  <MapContainer
-                    center={[parseFloat(gps.lat), parseFloat(gps.lon || "0")]}
-                    zoom={16}
-                    style={{ height: "100%", width: "100%" }}
-                    zoomControl={false}
-                  >
-                    <TileLayer
-                      url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-                      attribution="Tiles © Esri"
-                      crossOrigin="anonymous"
-                    />
-                    <Marker position={[parseFloat(gps.lat), parseFloat(gps.lon || "0")]} />
-                    <RecenterMap coords={gps} />
-                  </MapContainer>
-                ) : (
-                  <div className="h-full flex flex-col items-center justify-center text-slate-400">
-                    <FaMapMarkedAlt size={40} className="opacity-20 mb-3" />
-                    <p className="text-xs font-semibold">
-                      Esperando señal GPS...
-                    </p>
-                  </div>
-                )}
-              </div>
+                <div ref={mapRef} className="h-64">
+              <LeafletMap gps={gps} />
+                </div>
             </div>
 
             {/* === PANEL GPS === */}
