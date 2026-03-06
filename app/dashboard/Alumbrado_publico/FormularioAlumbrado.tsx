@@ -91,12 +91,6 @@ interface PrintSigs {
 
 
 
-
-
-
-
-
-
 // ================= COMPONENTE PRINCIPAL =================
 const FormularioAlumbrado: React.FC<FormularioProps> = ({ reportesIniciales }) => {
   const router = useRouter();
@@ -107,19 +101,6 @@ const FormularioAlumbrado: React.FC<FormularioProps> = ({ reportesIniciales }) =
   // ... otros estados ...
 const [reportesPrevios, setReportesPrevios] = useState<any[]>([]);
 
-// Efecto para cargar los puntos existentes de la base de datos
-// useEffect(() => {
-//   const cargarPuntos = async () => {
-//     try {
-//       const response = await fetch('/api/reportes'); // O usa una Server Action
-//       const data = await response.json();
-//       setReportesPrevios(data);
-//     } catch (error) {
-//       console.error("No se pudieron cargar los puntos previos", error);
-//     }
-//   };
-//   cargarPuntos();
-// }, []);
 
   useEffect(() => {
   const loadLeaflet = async () => {
@@ -426,8 +407,19 @@ useEffect(() => {
     // ================= MAPA EN PDF =================
     if (gps.lat && mapRef.current) {
       const canvas = await html2canvas(mapRef.current, {
-        useCORS: true, allowTaint: true, scale: 2
+        useCORS: true, 
+        allowTaint: true, 
+        scale: 4, // <-- 1. Aumentamos la escala de 2 a 4 para calidad ultra nítida
+        ignoreElements: (element) => {
+          // <-- 2. Esta función ignora los controles (zoom, atribución de Leaflet, etc.)
+          if (element.classList && element.classList.contains('leaflet-control-container')) {
+            return true;
+          }
+          return false;
+        }
       });
+      
+      // Usamos "image/png" para la máxima calidad (puedes cambiar a "image/jpeg", 1.0 si el PDF pesa demasiado)
       const imgData = canvas.toDataURL("image/png");
       
       doc.addPage();
