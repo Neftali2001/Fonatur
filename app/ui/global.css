@@ -16,3 +16,10 @@ input[type='number']::-webkit-outer-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
+
+.custom-background {
+  background-color: #005a53;
+}
+.custom-background2 {
+  background-color: #5e9132;
+}
