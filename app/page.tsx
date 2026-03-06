@@ -4,14 +4,15 @@ import Link from 'next/link';
 import styles from '@/app/ui/home.module.css';
 import { lusitana } from './ui/fonts';
 import Image from 'next/image';
+import BackgroundMusic from './BackgroundMusic';
 
 
 
 
 export default function Page() {
   return (
-    
     <main className="flex min-h-screen flex-col p-6">
+      <BackgroundMusic />
        <p
       className={`${lusitana.className} text-xl text-gray-800 md:text-3xl md:leading-normal`}
     ></p>
