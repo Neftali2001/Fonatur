@@ -1,13 +1,15 @@
-import { GlobeAltIcon } from '@heroicons/react/24/outline';
 import { lusitana } from '@/app/ui/fonts';
 
 export default function AcmeLogo() {
   return (
     <div
-      className={`${lusitana.className} flex flex-row items-center leading-none text-white`}
+      className={`${lusitana.className} flex w-full flex-row items-center justify-center leading-none text-white`}
     >
-      <GlobeAltIcon className="h-12 w-12 rotate-[15deg]" />
-      <p className="text-[44px]">Panel</p>
+      <img 
+        src="/Fonaturr2.png" 
+        alt="Logo Fonatur"
+        className="h-auto w-full object-contain" 
+      />
     </div>
   );
 }

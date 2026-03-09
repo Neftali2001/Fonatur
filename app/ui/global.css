@@ -23,3 +23,8 @@ input[type='number']::-webkit-outer-spin-button {
 .custom-background2 {
   background-color: #5e9132;
 }
+
+/* En tu globals.css */
+/* body {
+  background: radial-gradient(circle at center, #1a1a1a 0%, #0a0a0a 100%);
+} */

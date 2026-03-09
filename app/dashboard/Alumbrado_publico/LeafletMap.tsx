@@ -4,6 +4,9 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import { useEffect } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import { Map } from "lucide-react";
+import Link from 'next/link';
+
 
 // Definimos la estructura de los datos que vienen de Neon
 interface Reporte {
@@ -29,6 +32,30 @@ const RecenterMap = ({ coords }: { coords: { lat: string | null; lon: string | n
   return null
 }
 
+
+// Nuevo componente de ayuda dentro de LeafletMap.tsx
+const FitMarkers = ({ reportes }: { reportes: Reporte[] }) => {
+  const map = useMap();
+
+  useEffect(() => {
+    if (reportes.length > 0) {
+      // Creamos un "límite" (bounds) basado en las coordenadas de los reportes
+      const bounds = L.latLngBounds(
+        reportes.map((r) => [Number(r.latitud), Number(r.longitud)])
+      );
+      
+      // Ajustamos el mapa para que quepan todos los puntos con un poco de margen (padding)
+      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+    }
+  }, [reportes, map]);
+
+  return null;
+};
+
+
+
+
+
 export default function LeafletMap({ gps, reportes }: LeafletMapProps) {
   useEffect(() => {
     // Solución para los iconos en Next.js
@@ -43,9 +70,9 @@ export default function LeafletMap({ gps, reportes }: LeafletMapProps) {
   // Si no hay GPS actual ni reportes, mostramos carga
   if (!gps.lat && reportes.length === 0) {
     return (
-      <div className="h-full flex items-center justify-center text-slate-400 bg-slate-100 rounded-lg">
-        Cargando mapa y puntos...
-      </div>
+     <div className="h-full flex flex-col items-center justify-center text-slate-400 bg-slate-100 rounded-lg">
+  <Map className="w-10 h-10 mb-2" />
+</div>
     )
   }
 
@@ -63,8 +90,10 @@ export default function LeafletMap({ gps, reportes }: LeafletMapProps) {
       {/* Capa Satelital de Esri (Estilo Google Earth) */}
       <TileLayer
         url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-        attribution="Tiles © Esri &mdash; Source: Esri, i-cubed, USDA, USGS"
+        attribution=""
       />
+
+      <FitMarkers reportes={reportes} />
 
       {/* 1. PIN DEL GPS ACTUAL (Si existe) */}
       {gps.lat && (
@@ -83,7 +112,12 @@ export default function LeafletMap({ gps, reportes }: LeafletMapProps) {
             <div className="text-sm">
               <p className="font-bold border-b mb-1">Folio: {reporte.folio}</p>
               <p><b>Sector:</b> {reporte.sector}</p>
-              <p className="text-xs text-blue-600 mt-1 cursor-pointer">Ver detalle →</p>
+               <Link
+            href="/dashboard/Historial"
+            className="flex items-center gap-5 self-start rounded-lg custom-background px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-blue-400 md:text-base"
+          >
+            <span>Ver detalles</span> 
+          </Link>
             </div>
           </Popup>
         </Marker>

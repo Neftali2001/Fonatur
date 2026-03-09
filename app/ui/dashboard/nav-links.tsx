@@ -4,7 +4,8 @@ import {
   Sparkles,
   TrashIcon ,  // Reemplazo de Trash por Trash2
   Clock,
-  Brush,  // Uso Brush para limpieza
+  Brush,
+  Car,  // Uso Brush para limpieza
 } from 'lucide-react';
 
 type LinkItem = {
@@ -19,7 +20,8 @@ const links: LinkItem[] = [
   { name: 'Áreas verdes', href: '/dashboard/Areas_verdes', icon: Sparkles },
   { name: 'Barrido vialidades', href: '/dashboard/Barrido_vialidades', icon: Brush  },  // Cambié por Brush
   { name: 'Limpieza Urbana', href: '/dashboard/Limpieza_Urbana', icon: TrashIcon },  // Cambié por Brush
-  // { name: 'Historial', href: '/dashboard/Historial', icon: Clock },
+  { name: 'Vehiculo', href: '/dashboard/vehiculo', icon: Car },
+  { name: 'Historial', href: '/dashboard/Historial', icon: Clock },
 ];
 
 export default function NavLinks() {

@@ -236,6 +236,25 @@ const BarridoVialidades: React.FC<FormularioProps> = ({ reportesIniciales }) => 
     }))
   );
 
+
+    // Estado para saber en qué pregunta estamos (índice 0 a 13)
+    const [preguntaActual, setPreguntaActual] = useState(0);
+  
+    // Función para guardar la respuesta y avanzar automáticamente a la siguiente
+    const responderYAvanzar = (id: number, valor: string) => {
+      handleChecklistChange(id, 'respuesta', valor);
+      
+      // Le damos un pequeño retardo (350ms) para que el usuario vea qué seleccionó antes de cambiar de pantalla
+      if (preguntaActual < checklist.length - 1) {
+        setTimeout(() => setPreguntaActual(preguntaActual + 1), 350);
+      }
+    };
+  
+
+
+
+
+
   const formRef = useRef<HTMLDivElement>(null); 
   
   const handleChecklistChange = (id: number, field: keyof ChecklistItem, value: string) => {
@@ -245,6 +264,86 @@ const BarridoVialidades: React.FC<FormularioProps> = ({ reportesIniciales }) => 
       )
     );
   };
+
+
+   const [formulariosAcumulados, setFormulariosAcumulados] = useState<any[]>([]);
+  const limpiarFormulario = () => {
+        setPreguntaActual(0);
+
+  // Reiniciamos checklist, fotos y GPS. 
+  // Puedes decidir si mantener el mismo "Sector" y "Tramo" o reiniciarlos también.
+  setChecklist(
+    preguntasAlumbrado.map((p, i) => ({
+      id: i + 1,
+      pregunta: p,
+      respuesta: "",
+      observacion: ""
+    }))
+  );
+  setFotos({ Foto1: null, Foto2: null, Foto3: null, Foto4: null, Foto5: null, Foto6: null });
+  setGps({ lat: null, lon: null, precision: '--' });
+};
+const procesarFormularioActual = async () => {
+  try {
+    // 1. Guardar el formulario actual en la base de datos de Neon
+    await guardarCuestionario();
+
+    // 2. Capturar el mapa actual en Base64 antes de que se limpie el componente
+    let mapImage = null;
+    if (gps.lat && mapRef.current) {
+      const canvas = await html2canvas(mapRef.current, {
+        useCORS: true,
+        allowTaint: true,
+        scale: 4,
+        ignoreElements: (element) => element.classList && element.classList.contains('leaflet-control-container')
+      });
+      mapImage = canvas.toDataURL("image/png");
+    }
+
+    // 3. Preparar todos los datos locales para el PDF
+    const sectorFinal = formData.sector === "Otro" ? sectorPersonalizado : formData.sector;
+    const tramoFinal = formData.sector === "Otro" ? tramoPersonalizado : formData.Tramo;
+
+    const formularioCompleto = {
+      formData: { ...formData, sector: sectorFinal, Tramo: tramoFinal },
+      checklist: [...checklist],
+      gps: { ...gps },
+      fotos: { ...fotos },
+      mapImage, 
+      fechaCaptura: new Date()
+    };
+
+    const nuevosFormularios = [...formulariosAcumulados, formularioCompleto];
+    setFormulariosAcumulados(nuevosFormularios);
+
+    // 4. Preguntar si desea hacer otro formulario
+    const agregarOtro = window.confirm("Formulario guardado en la BD exitosamente.\n\n¿Deseas llenar OTRO formulario para incluirlo en el MISMO PDF?");
+
+    if (agregarOtro) {
+      // Limpiamos pantalla para capturar el siguiente
+      limpiarFormulario();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      // Si no quiere agregar más, generamos el PDF con todos los acumulados
+      await generarPDFMultiples(nuevosFormularios);
+      
+      // Reiniciamos todo para un reporte completamente nuevo
+      setFormulariosAcumulados([]);
+      limpiarFormulario();
+    }
+
+  } catch (error) {
+    console.error("Error en el proceso:", error);
+    alert("Hubo un error al procesar el formulario.");
+  }
+};
+
+
+
+
+
+
+
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -278,33 +377,53 @@ const BarridoVialidades: React.FC<FormularioProps> = ({ reportesIniciales }) => 
     }
   };
 
-  const generarPDF = async () => {
-    const doc = new jsPDF("p", "mm", "a4");
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
+const generarPDFMultiples = async (listaFormularios: any[]) => {
+  const doc = new jsPDF("p", "mm", "a4");
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+
+  // Función para la marca de agua (Se ejecuta AL FINAL)
+  const aplicarMarcaDeAguaFinal = (pdfDoc: any) => {
+    const totalPaginas = pdfDoc.internal.getNumberOfPages();
+    for (let i = 1; i <= totalPaginas; i++) {
+      pdfDoc.setPage(i);
+      pdfDoc.saveGraphicsState();
+      // Opacidad para que se mezcle sobre las fotos/textos sin ocultarlos del todo
+      pdfDoc.setGState(new (pdfDoc as any).GState({ opacity: 0.15 }));
+      
+      const imgWidth = 140; 
+      const imgHeight = 40;
+      const x = (pageWidth - imgWidth) / 2;
+      const yPos = (pageHeight - imgHeight) / 2;
+
+      pdfDoc.addImage("/logo_fonatur.png", 'PNG', x, yPos, imgWidth, imgHeight);
+      pdfDoc.restoreGraphicsState();
+    }
+  };
+
+  const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+  const folioFinal = `REV-MULTIPLE-${random}`;
+
+  // Iteramos sobre todos los formularios guardados
+  for (let index = 0; index < listaFormularios.length; index++) {
+    const form = listaFormularios[index];
+    
+    // Si no es el primer formulario, agregamos una nueva página
+    if (index > 0) doc.addPage();
+
     const margin = 15;
     let y = 20;
-
-    const sectorFinal = formData.sector === "Otro" ? sectorPersonalizado : formData.sector;
-    const tramoFinal = formData.sector === "Otro" ? tramoPersonalizado : formData.Tramo;
-
-    const accesoPublico = formData.accesoPublico || "No especificado";
-
-    const ahora = new Date();
-    const fechaFormateada = ahora.toLocaleDateString("es-MX", { day: "2-digit", month: "2-digit", year: "numeric" });
-    const horaFormateada = ahora.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
-    const ubicacionTexto = gps.lat && gps.lon ? `Lat: ${gps.lat}  |  Lon: ${gps.lon}` : "No capturada";
-
-    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-    const fechaArchivo = fechaFormateada.replace(/\//g, '-');
-    const folio = `REV-${fechaArchivo}-${random}`;
+    
+    const fechaFormateada = form.fechaCaptura.toLocaleDateString("es-MX", { day: "2-digit", month: "2-digit", year: "numeric" });
+    const horaFormateada = form.fechaCaptura.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
+    const ubicacionTexto = form.gps.lat && form.gps.lon ? `Lat: ${form.gps.lat}  |  Lon: ${form.gps.lon}` : "No capturada";
 
     // ================= ENCABEZADO =================
     doc.setFont("helvetica", "bold");
     doc.setFontSize(14);
     y += 6;
     doc.setFontSize(16);
-    doc.text("REPORTE DE MANTENIMIENTO CIP ACAPULCO-COYUCA", margin, y);
+    doc.text(`REPORTE DE MANTENIMIENTO CIP ACAPULCO-COYUCA (Reg. ${index + 1})`, margin, y);
     y += 4;
     doc.setLineWidth(0.6);
     doc.line(margin, y, pageWidth - margin, y);
@@ -313,17 +432,16 @@ const BarridoVialidades: React.FC<FormularioProps> = ({ reportesIniciales }) => 
     // ================= DATOS GENERALES =================
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
-    doc.text(`Folio: ${folio}`, margin, y);
+    doc.text(`Folio Interno: ${folioFinal}-${index + 1}`, margin, y);
     doc.text(`Fecha: ${fechaFormateada}`, pageWidth / 2, y);
     doc.text(`Hora: ${horaFormateada}`, pageWidth - 50, y);
     y += 6;
-    doc.text(`Sector: ${sectorFinal}`, margin, y);
+    doc.text(`Sector: ${form.formData.sector}`, margin, y);
     y += 6;
-    doc.text(`Tramo: ${tramoFinal}`, margin, y);
+    doc.text(`Tramo: ${form.formData.Tramo}`, margin, y);
     y += 6;
-    doc.text(`Acceso público a playa: ${accesoPublico}`, margin, y);
+    doc.text(`Acceso público a playa: ${form.formData.accesoPublico || "No especificado"}`, margin, y);
     y += 6;
-
 
     // ================= SECCIÓN DE CHECKLIST =================
     doc.setFont("helvetica", "bold");
@@ -332,13 +450,17 @@ const BarridoVialidades: React.FC<FormularioProps> = ({ reportesIniciales }) => 
     y += 5;
 
     const tableData: any[] = [];
-    checklist.forEach(item => {
+    form.checklist.forEach((item: any) => {
+      if (item.id === 9) {
+        tableData.push([
+          { content: "ESTADO FÍSICO", colSpan: 2, styles: { halign: 'center', fillColor: [0, 0, 0], textColor: [255, 255, 255], fontStyle: 'bold' } },
+          { content: "Bueno", styles: { halign: 'center', fillColor: [0, 0, 0], textColor: [255, 255, 255], fontStyle: 'bold' } },
+          { content: "Malo", styles: { halign: 'center', fillColor: [0, 0, 0], textColor: [255, 255, 255], fontStyle: 'bold' } },
+          { content: "Observaciones", styles: { halign: 'center', fillColor: [0, 0, 0], textColor: [255, 255, 255], fontStyle: 'bold' } }
+        ]);
+      }
       tableData.push([
-        item.id,
-        item.pregunta,
-        item.respuesta === "SI" ? "X" : "",
-        item.respuesta === "NO" ? "X" : "",
-        item.observacion || ""
+        item.id, item.pregunta, item.respuesta === "SI" ? "X" : "", item.respuesta === "NO" ? "X" : "", item.observacion || ""
       ]);
     });
 
@@ -349,61 +471,30 @@ const BarridoVialidades: React.FC<FormularioProps> = ({ reportesIniciales }) => 
       theme: "grid",
       styles: { fontSize: 8, cellPadding: 3, valign: "top", lineWidth: 0.2 },
       headStyles: { fillColor: [30, 30, 30], textColor: 255, fontStyle: "bold", halign: "center" },
-      columnStyles: {
-        0: { cellWidth: 12, halign: "center" },
-        1: { cellWidth: 110 },
-        2: { cellWidth: 20, halign: "center" },
-        3: { cellWidth: 20, halign: "center" }
-      }
+      columnStyles: { 0: { cellWidth: 12, halign: "center" }, 1: { cellWidth: 110 }, 2: { cellWidth: 20, halign: "center" }, 3: { cellWidth: 20, halign: "center" } }
     });
 
     y = (doc as any).lastAutoTable.finalY + 10;
     y += 6;
     doc.text(`Ubicación: ${ubicacionTexto}`, margin, y);
-    y += 10;
-
-    // ================= PIE DE PÁGINA =================
-    doc.setFontSize(8);
-    doc.text(
-      `Documento generado electrónicamente | Página 1 de 1`,
-      pageWidth / 2,
-      pageHeight - 10,
-      { align: "center" }
-    );
-
+    
     // ================= MAPA EN PDF =================
-    if (gps.lat && mapRef.current) {
-      const canvas = await html2canvas(mapRef.current, {
-        useCORS: true, 
-        allowTaint: true, 
-        scale: 4, // <-- 1. Aumentamos la escala de 2 a 4 para calidad ultra nítida
-        ignoreElements: (element) => {
-          // <-- 2. Esta función ignora los controles (zoom, atribución de Leaflet, etc.)
-          if (element.classList && element.classList.contains('leaflet-control-container')) {
-            return true;
-          }
-          return false;
-        }
-      });
-      
-      // Usamos "image/png" para la máxima calidad (puedes cambiar a "image/jpeg", 1.0 si el PDF pesa demasiado)
-      const imgData = canvas.toDataURL("image/png");
-      
+    if (form.mapImage) {
       doc.addPage();
       doc.setFont("helvetica", "bold");
       doc.setFontSize(12);
-      doc.text("MAPA DE UBICACIÓN", margin, 20);
-      doc.addImage(imgData, "PNG", margin, 30, pageWidth - margin * 2, 90);
+      doc.text(`MAPA DE UBICACIÓN (Reg. ${index + 1})`, margin, 20);
+      doc.addImage(form.mapImage, "PNG", margin, 30, pageWidth - margin * 2, 90);
     }
 
     // ================= EVIDENCIA FOTOGRÁFICA =================
-    const imagenes = Object.entries(fotos).filter(([_, value]) => value !== null) as [string, string][];
+    const imagenes = Object.entries(form.fotos).filter(([_, value]) => value !== null) as [string, string][];
     if (imagenes.length > 0) {
       doc.addPage();
       let yImg = 20;
       doc.setFont("helvetica", "bold");
       doc.setFontSize(12);
-      doc.text("4. EVIDENCIA FOTOGRÁFICA", margin, yImg);
+      doc.text(`4. EVIDENCIA FOTOGRÁFICA (Reg. ${index + 1})`, margin, yImg);
       yImg += 12;
 
       const imgWidth = 80;
@@ -428,12 +519,11 @@ const BarridoVialidades: React.FC<FormularioProps> = ({ reportesIniciales }) => 
         const newHeight = imgProps.height * ratio;
 
         doc.addImage(base64, "JPEG", xPosition, yImg, newWidth, newHeight);
-
         doc.setFont("helvetica", "normal");
         doc.setFontSize(8);
         doc.text(`Figura ${contador}. Evidencia: ${tipo.toUpperCase()}`, xPosition, yImg + imgHeight + 6);
+        
         contador++;
-
         if (xPosition + imgWidth * 2 + espacioX <= pageWidth - margin) {
           xPosition += imgWidth + espacioX;
         } else {
@@ -442,10 +532,14 @@ const BarridoVialidades: React.FC<FormularioProps> = ({ reportesIniciales }) => 
         }
       }
     }
-    // ================= GUARDAR =================
-    await guardarCuestionario();
-    doc.save(`Reporte_Tecnico_${folio}.pdf`);
-  };
+  }
+
+  // ================= APLICAR MARCA DE AGUA SOBRE TODO AL FINAL =================
+  aplicarMarcaDeAguaFinal(doc);
+
+  // Guardar PDF
+  doc.save(`${folioFinal}.pdf`);
+};
 
   return (
     <div className="relative">
@@ -625,20 +719,64 @@ const BarridoVialidades: React.FC<FormularioProps> = ({ reportesIniciales }) => 
                 />
               </div>
 
-              <button
+          <button
                 onClick={obtenerUbicacion}
                 disabled={cargandoGps}
-                className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center justify-center gap-2 transition-all shadow-lg disabled:opacity-50"
+                className={`relative w-full py-3 rounded-xl text-white font-bold flex items-center justify-center overflow-hidden transition-all shadow-lg ${
+                  cargandoGps
+                    ? "bg-slate-800 cursor-not-allowed border border-emerald-900/50" // Fondo oscuro para resaltar la luz de búsqueda
+                    : "bg-emerald-600 hover:bg-emerald-700 hover:-translate-y-0.5 hover:shadow-emerald-500/30"
+                }`}
               >
                 {cargandoGps ? (
                   <>
-                    <FaSpinner className="animate-spin" />
-                    Buscando precisión...
+                    {/* === ANIMACIONES KEYFRAMES INSERTADAS === */}
+                    <style>{`
+                      @keyframes scanline {
+                        0% { transform: translateY(-150%); }
+                        100% { transform: translateY(200%); }
+                      }
+                      @keyframes radar-spin {
+                        from { transform: rotate(0deg); }
+                        to { transform: rotate(360deg); }
+                      }
+                    `}</style>
+
+                    {/* === 1. LÁSER DE ESCANEO BARRIDO === */}
+                    <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-xl">
+                      <div 
+                        className="w-full h-12 bg-gradient-to-b from-transparent via-emerald-400/20 to-emerald-400/50 border-b-2 border-emerald-400 shadow-[0_5px_15px_rgba(52,211,152,0.4)]"
+                        style={{ animation: 'scanline 1.5s linear infinite' }}
+                      ></div>
+                    </div>
+
+                    {/* === 2. PULSO DE SEÑAL GLOBAL === */}
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div className="w-32 h-32 border border-emerald-500/20 rounded-full animate-ping" style={{ animationDuration: '2s' }}></div>
+                    </div>
+                    
+                    {/* === 3. CONTENIDO (RADAR Y TEXTO) === */}
+                    <div className="relative z-10 flex items-center gap-3">
+                      {/* Contenedor del ícono con anillo giratorio */}
+                      <div className="relative flex items-center justify-center w-6 h-6">
+                        {/* Arco de radar girando rápido */}
+                        <div 
+                          className="absolute inset-0 border-2 border-transparent border-t-emerald-400 rounded-full opacity-90" 
+                          style={{ animation: 'radar-spin 0.8s linear infinite' }}
+                        ></div>
+                        {/* Mirilla estática en el centro */}
+                        <FaCrosshairs className="text-emerald-300 relative z-10 text-sm" />
+                      </div>
+                      <span className="animate-pulse tracking-wide font-medium text-emerald-100">
+                        Buscando satélites...
+                      </span>
+                    </div>
                   </>
                 ) : (
                   <>
-                    <FaCrosshairs />
-                    Capturar Coordenadas
+                    {/* === ESTADO NORMAL === */}
+                    <FaCrosshairs className="mr-2 text-lg" />
+                    <span>Capturar Coordenadas</span>
                   </>
                 )}
               </button>
@@ -652,107 +790,153 @@ const BarridoVialidades: React.FC<FormularioProps> = ({ reportesIniciales }) => 
             </div>
           </section>
 
-          <section className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-            <h2 className="text-[#d35400] font-bold mb-4 uppercase text-sm">
-              REVISIÓN GENERAL - ALUMBRADO PÚBLICO
-            </h2>
-            <div className="overflow-x-auto border rounded-lg">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-800 text-white text-xs uppercase">
-                  <tr>
-                    <th className="p-3 w-12 text-center">N°</th>
-                    <th className="p-3 text-left">Concepto Evaluado</th>
-                    <th className="p-3 text-center">Cumple</th>
-                    <th className="p-3 text-center">No Cumple</th>
-                    <th className="p-3 text-center">Observaciones</th>
-                  </tr>
-                </thead>
+       {/*_____________________________CUESTIONARIO (MODO WIZARD)_________________________________*/}
+<section className="bg-white rounded-xl shadow-sm p-4 sm:p-6 border border-gray-200 max-w-2xl mx-auto w-full">
+  <div className="flex justify-between items-center mb-4">
+    <h2 className="text-[#d35400] font-bold uppercase text-xs sm:text-sm">
+                REVISIÓN GENERAL - BARRIDO VIALIDADES
+    </h2>
+    <span className="text-xs font-bold bg-slate-100 px-3 py-1 rounded-full text-slate-600">
+      {preguntaActual + 1} de {checklist.length}
+    </span>
+  </div>
 
-                <tbody>
-                  {checklist.map((item) => (
-                    <React.Fragment key={item.id}>
-                      {/* ===== FILA NORMAL ===== */}
-                      <tr className="border-b hover:bg-slate-50 transition">
-                        <td className="p-3 text-center font-bold text-slate-600">
-                          {item.id}
-                        </td>
+  {/* Barra de progreso */}
+  <div className="w-full bg-gray-200 rounded-full h-2 mb-6">
+    <div
+      className="bg-emerald-500 h-2 rounded-full transition-all duration-300"
+      style={{ width: `${((preguntaActual + 1) / checklist.length) * 100}%` }}
+    ></div>
+  </div>
 
-                        <td className="p-3 text-slate-700">
-                          {item.pregunta}
-                        </td>
+  {/* Tarjeta de la Pregunta Actual */}
+  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-8 min-h-[300px] flex flex-col justify-center transition-all">
+    
+    {/* Texto de la Pregunta */}
+    <h3 className="text-lg sm:text-xl font-bold text-center text-slate-800 mb-8 min-h-[60px] flex items-center justify-center">
+      {checklist[preguntaActual].id}. {checklist[preguntaActual].pregunta}
+    </h3>
 
-                        <td className="p-3 text-center">
-                          <input
-                            type="radio"
-                            name={`pregunta-${item.id}`}
-                            checked={item.respuesta === "SI"}
-                            onChange={() =>
-                              handleChecklistChange(item.id, "respuesta", "SI")
-                            }
-                            className="w-5 h-5 accent-emerald-600 cursor-pointer"
-                          />
-                        </td>
+    {/* Botones de Opción (Simulados con etiquetas grandes) */}
+    <div className="flex flex-col sm:flex-row gap-4 justify-center mb-6">
+      <label
+        className={`cursor-pointer flex-1 py-4 px-6 rounded-xl border-2 text-center font-bold transition-all ${
+          checklist[preguntaActual].respuesta === "SI"
+            ? "bg-emerald-500 border-emerald-500 text-white shadow-lg shadow-emerald-500/30"
+            : "bg-white border-gray-200 text-gray-600 hover:border-emerald-300 hover:bg-emerald-50"
+        }`}
+      >
+        <input
+          type="radio"
+          name={`pregunta-${checklist[preguntaActual].id}`}
+          value="SI"
+          className="hidden"
+          checked={checklist[preguntaActual].respuesta === "SI"}
+          onChange={() => responderYAvanzar(checklist[preguntaActual].id, "SI")}
+        />
+        CUMPLE
+      </label>
 
-                        <td className="p-3 text-center">
-                          <input
-                            type="radio"
-                            name={`pregunta-${item.id}`}
-                            checked={item.respuesta === "NO"}
-                            onChange={() =>
-                              handleChecklistChange(item.id, "respuesta", "NO")
-                            }
-                            className="w-5 h-5 accent-red-600 cursor-pointer"
-                          />
-                        </td>
+      <label
+        className={`cursor-pointer flex-1 py-4 px-6 rounded-xl border-2 text-center font-bold transition-all ${
+          checklist[preguntaActual].respuesta === "NO"
+            ? "bg-red-500 border-red-500 text-white shadow-lg shadow-red-500/30"
+            : "bg-white border-gray-200 text-gray-600 hover:border-red-300 hover:bg-red-50"
+        }`}
+      >
+        <input
+          type="radio"
+          name={`pregunta-${checklist[preguntaActual].id}`}
+          value="NO"
+          className="hidden"
+          checked={checklist[preguntaActual].respuesta === "NO"}
+          onChange={() => responderYAvanzar(checklist[preguntaActual].id, "NO")}
+        />
+        NO CUMPLE
+      </label>
+    </div>
 
-                        <td className="p-3">
-                          <input
-                            type="text"
-                            value={item.observacion}
-                            onChange={(e) =>
-                              handleChecklistChange(item.id, "observacion", e.target.value)
-                            }
-                            className="w-full p-2 rounded-lg border focus:ring-2 focus:ring-orange-400 outline-none text-xs"
-                            placeholder="Observaciones..."
-                          />
-                        </td>
-                      </tr>
-                    </React.Fragment>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
+    {/* Input de Observaciones */}
+    <div className="mt-auto">
+      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+        Observaciones (Opcional)
+      </label>
+      <input
+        type="text"
+        placeholder="Escribe aquí si hay algún detalle..."
+        value={checklist[preguntaActual].observacion}
+        onChange={(e) => handleChecklistChange(checklist[preguntaActual].id, "observacion", e.target.value)}
+        className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-[#e67e22]/50 focus:border-[#e67e22] outline-none transition-all text-sm"
+      />
+    </div>
+  </div>
 
-          <section className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
+  {/* Controles de Navegación Manual */}
+  <div className="flex justify-between mt-6">
+    <button
+      type="button"
+      onClick={() => setPreguntaActual(Math.max(0, preguntaActual - 1))}
+      disabled={preguntaActual === 0}
+      className="px-5 py-2.5 rounded-lg font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm"
+    >
+      ← Anterior
+    </button>
+    
+    <button
+      type="button"
+      onClick={() => setPreguntaActual(Math.min(checklist.length - 1, preguntaActual + 1))}
+      disabled={preguntaActual === checklist.length - 1}
+      className="px-5 py-2.5 rounded-lg font-bold text-white bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm"
+    >
+      Siguiente →
+    </button>
+  </div>
+</section>
+
+<section className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
             <h2 className="text-[#d35400] font-bold mb-4 flex items-center gap-2 uppercase text-sm">
               <FaCamera size={18}/> Evidencia Fotográfica y Observaciones
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {["Foto 1", "Foto 2", "Foto 3", "Foto 4", "Foto 5", "Foto 6"].map((tipo) => (
-                <label key={tipo} className="group cursor-pointer">
-                  <input
-                    type="file"
-                    className="hidden"
-                    accept="image/*"
-                    onChange={(e) => handleImageUpload(e, tipo.replace(/\s/g, ''))}
-                  />
-
-                  <div className="h-44 rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 flex items-center justify-center overflow-hidden group-hover:border-orange-400 transition shadow-inner">
-                    {fotos[tipo.replace(/\s/g, '')] ? (
-                      <img
-                        src={fotos[tipo.replace(/\s/g, '')] as string}
-                        alt={tipo}
-                        className="w-full h-full object-cover"
-                      />
+              {/* Nota que quitamos los espacios para que hagan match exacto con las llaves de tu estado 'fotos' */}
+              {["Foto1", "Foto2", "Foto3", "Foto4", "Foto5", "Foto6"].map((tipo) => (
+                <div key={tipo} className="flex flex-col gap-2">
+                  <label className="text-xs tracking-wider uppercase text-gray-500 font-semibold">
+                    {tipo.replace("Foto", "Foto ")}
+                  </label>
+                  
+                  <div className="relative border-2 border-dashed border-gray-300 rounded-xl p-4 flex flex-col items-center justify-center bg-gray-50 hover:bg-gray-100 transition h-48 overflow-hidden">
+                    {fotos[tipo] ? (
+                      <>
+                        <img 
+                          src={fotos[tipo]!} 
+                          alt={tipo} 
+                          className="h-full w-full object-contain rounded" 
+                        />
+                        {/* Botón para eliminar la foto si el usuario se equivoca */}
+                        <button
+                          onClick={() => setFotos(prev => ({ ...prev, [tipo]: null }))}
+                          className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full hover:bg-red-600 shadow-md transition-colors"
+                        >
+                          <FaTrash size={14} />
+                        </button>
+                      </>
                     ) : (
-                      <div className="text-center text-slate-400">
-                        <FaCamera className="mx-auto mb-2" />
-                        <p className="text-xs font-semibold uppercase">{tipo}</p>
-                      </div>
+                      <>
+                        <FaFolderOpen className="text-gray-400 mb-2" size={32} />
+                        <span className="text-sm text-gray-500 font-medium">Subir imagen</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleImageUpload(e, tipo)}
+                          // EL TRUCO ESTÁ AQUÍ: Resetea el valor del input al hacer clic, forzando que el onChange siempre se dispare.
+                          onClick={(e) => { e.currentTarget.value = "" }}
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        />
+                      </>
                     )}
                   </div>
-                </label>
+                </div>
               ))}
             </div>
           </section>
@@ -760,7 +944,7 @@ const BarridoVialidades: React.FC<FormularioProps> = ({ reportesIniciales }) => 
 
         <footer className="flex flex-col md:flex-row justify-center gap-6 pt-6 border-t">
           <button
-            onClick={generarPDF}
+            onClick={procesarFormularioActual}
             className="px-10 py-4 rounded-2xl bg-gradient-to-r from-orange-500 to-orange-600 text-white font-bold shadow-xl hover:scale-105 transition transform flex items-center gap-3"
           >
             <FaFilePdf />
