@@ -1,8 +1,12 @@
 // app/dashboard/Alumbrado_publico/page.tsx
 import { sql } from '@vercel/postgres';
+import { obtenerReportePorId } from '@/app/lib/actions';
 import FormularioAlumbrado from './FormularioAlumbrado';
 
-// Esta función corre en el servidor, aquí sí funciona el SQL
+interface PageProps {
+  searchParams: Promise<{ editId?: string }>;
+}
+
 async function getReportes() {
   try {
     const { rows } = await sql`
@@ -16,16 +20,54 @@ async function getReportes() {
   }
 }
 
-export default async function Page() {
-  const reportesPrevios = await getReportes();
+export default async function Page({ searchParams }: PageProps) {
+  const { editId } = await searchParams;
+
+  const [reportesPrevios, reporteParaEditar] = await Promise.all([
+    getReportes(),
+    editId ? obtenerReportePorId(editId) : Promise.resolve(null),
+  ]);
 
   return (
     <div className="p-4">
-      {/* Le pasamos los datos al componente de cliente */}
-      <FormularioAlumbrado reportesIniciales={reportesPrevios} />
+      <FormularioAlumbrado
+        reportesIniciales={reportesPrevios}
+        reporteParaEditar={reporteParaEditar}
+      />
     </div>
   );
 }
+
+
+
+// // app/dashboard/Alumbrado_publico/page.tsx
+// import { sql } from '@vercel/postgres';
+// import FormularioAlumbrado from './FormularioAlumbrado';
+
+// // Esta función corre en el servidor, aquí sí funciona el SQL
+// async function getReportes() {
+//   try {
+//     const { rows } = await sql`
+//       SELECT id, folio, sector, latitud::float, longitud::float 
+//       FROM reportes_alumbrado
+//     `;
+//     return rows;
+//   } catch (e) {
+//     console.error("Error cargando DB:", e);
+//     return [];
+//   }
+// }
+
+// export default async function Page() {
+//   const reportesPrevios = await getReportes();
+
+//   return (
+//     <div className="p-4">
+//       {/* Le pasamos los datos al componente de cliente */}
+//       <FormularioAlumbrado reportesIniciales={reportesPrevios} />
+//     </div>
+//   );
+// }
 
 
 

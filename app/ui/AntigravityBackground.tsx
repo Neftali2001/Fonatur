@@ -28,7 +28,7 @@ export default function AntigravityBackground() {
     const mouse = { x: -1000, y: -1000 };
 
     // Símbolos de código inspirados en la estética de Antigravity
-    const symbols = ["FONATUR","✦" , "{ }", "< >", "+", "⌘", "/>", "#", "()", "[]", "⚡︎","1","0"];
+    const symbols = ["FONATUR","✦" , "{ }", "< >", "+", "⌘", "/>", "#", "()", "[]", "⚡︎","1","0","📋","🌎"];
    
 
     

@@ -69,6 +69,20 @@ export default async function HistorialPage({ searchParams }: HistorialPageProps
     }
   };
 
+
+  // Mapeo de categoria (BD) → ruta real de la carpeta
+const rutaPorCategoria: Record<string, string> = {
+  'ALUMBRADO PÚBLICO': 'Alumbrado_publico',
+  'AREAS VERDES':      'Areas_verdes',
+   'BARRIDO VIALIDADES':      'Barrido_vialidades',
+    'LIMPIEZA URBANA':      'Limpieza_Urbana',
+  // agrega aquí las demás categorías que tengas
+};
+
+// Función helper
+const getRuta = (categoria: string) =>
+  rutaPorCategoria[categoria] ?? categoria;
+
   return (
     <main className="p-4 md:p-6 max-w-7xl mx-auto">
       {/* --- FORMULARIO DE FILTROS --- */}
@@ -142,11 +156,28 @@ export default async function HistorialPage({ searchParams }: HistorialPageProps
                 <div>
                   <div className="font-bold text-slate-800 text-base mb-0.5">{reporte.folio}</div>
                   <div className="text-xs text-slate-400">
-                    {new Date(reporte.fecha).toLocaleString('es-MX', {
-                      timeZone: 'America/Mexico_City',
-                      day: '2-digit', month: '2-digit', year: 'numeric',
-                      hour: '2-digit', minute: '2-digit', hour12: true
-                    })}
+                    {(() => {
+                      try {
+                        // 1. Convertimos a objeto Date (funciona si es string o Date)
+                        const d = new Date(reporte.fecha);
+
+                        // 2. Verificamos si la fecha es válida
+                        if (isNaN(d.getTime())) return 'Fecha no válida';
+
+                        // 3. Formateamos directamente
+                        return d.toLocaleString('es-MX', {
+                          timeZone: 'America/Mexico_City',
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          hour12: true
+                        });
+                      } catch (e) {
+                        return 'Error en fecha';
+                      }
+                    })()}
                   </div>
                 </div>
                 <div className="md:hidden">
@@ -192,7 +223,7 @@ export default async function HistorialPage({ searchParams }: HistorialPageProps
                   <Link
                     // Dinámicamente cambiamos la ruta basada en la categoría
                     // Ejemplo: si categoria es 'barrido', irá a /dashboard/Barrido?editId=...
-                    href={`/dashboard/${reporte.categoria}?editId=${reporte.id}`}
+                    href={`/dashboard/${getRuta(reporte.categoria)}?editId=${reporte.id}`}
                     className="p-2 md:p-2.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
                     title="Editar"
                   >

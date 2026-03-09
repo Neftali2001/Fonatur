@@ -22,15 +22,16 @@ const LeafletMap = dynamic(
 import autoTable from "jspdf-autotable";
 import html2canvas from "html2canvas";
 import { useRouter } from 'next/navigation';
-import { crearReporte } from '@/app/lib/actions';
+import { crearReporte, actualizarReporte } from '@/app/lib/actions';
 
 // Solución para evitar el error de iconos por defecto de Leaflet en TypeScript
-
-
 // ================= INTERFACES =================
+
 interface FormularioProps {
-  reportesIniciales: any[]; 
+  reportesIniciales: any[];
+  reporteParaEditar?: any | null; // ← AGREGAR
 }
+
 interface GpsCoords {
   lat: string | null;
   lon: string | null;
@@ -62,6 +63,7 @@ interface FormData {
   Tramo: string;
   accesoPublico: string;
   tipoMantenimiento: string;
+  categoria: string; 
 }
 
 interface Punto {
@@ -89,11 +91,8 @@ interface PrintSigs {
   cliente: string | null;
 }
 
-
-
-
 // ================= COMPONENTE PRINCIPAL =================
-const FormularioAlumbrado: React.FC<FormularioProps> = ({ reportesIniciales }) => {
+const FormularioAlumbrado: React.FC<FormularioProps> = ({ reportesIniciales, reporteParaEditar }) => {
   const router = useRouter();
   const mapRef = useRef<HTMLDivElement>(null);
   const [currentTime, setCurrentTime] = useState('');
@@ -161,13 +160,21 @@ useEffect(() => {
     elevB: '',
     area: '2.35ha',
     notas: 'Trabajo realizado sin incidencias relevantes...',
-    sector: '',
-    Tramo: '',
-    accesoPublico: "",
-    tipoMantenimiento: 'Ordinario'
+    sector: reporteParaEditar?.sector ?? '',
+    Tramo: reporteParaEditar?.tramo ?? '',
+    accesoPublico: reporteParaEditar?.acceso_publico ?? '',
+    tipoMantenimiento: reporteParaEditar?.tipo_mantenimiento ?? 'Ordinario',
+    categoria: reporteParaEditar?.categoria ?? 'ALUMBRADO PÚBLICO',
+  
+ 
+ 
   });
 
-  const [gps, setGps] = useState<GpsCoords>({ lat: null, lon: null, precision: '--' });
+ const [gps, setGps] = useState<GpsCoords>({
+  lat: reporteParaEditar?.latitud?.toString() ?? null,
+  lon: reporteParaEditar?.longitud?.toString() ?? null,
+  precision: reporteParaEditar?.latitud ? 'Guardado' : '--',
+});
   const [cargandoGps, setCargandoGps] = useState<boolean>(false);
   const watchId = useRef<number | null>(null);
 
@@ -244,39 +251,37 @@ useEffect(() => {
     "ESTADO DE LÁMPARAS TIPO FRAGATA",
     "MANTENIMIENTO A TRANSFORMADORES DE ALUMBRADO"
   ];
+ 
+const checklistGuardado: ChecklistItem[] | null =
+  reporteParaEditar?.checklist
+    ? (typeof reporteParaEditar.checklist === 'string'
+        ? JSON.parse(reporteParaEditar.checklist)
+        : reporteParaEditar.checklist)
+    : null;
 
-  const [checklist, setChecklist] = useState<ChecklistItem[]>(
-    preguntasAlumbrado.map((p, i) => ({
-      id: i + 1,
-      pregunta: p,
-      respuesta: "",
-      observacion: "" 
-    }))
-  );
-
-
+// 2️⃣ LUEGO el useState que la usa
+const [checklist, setChecklist] = useState<ChecklistItem[]>(
+  checklistGuardado ??
+  preguntasAlumbrado.map((p, i) => ({
+    id: i + 1,
+    pregunta: p,
+    respuesta: "",
+    observacion: ""
+  }))
+);
 
   // Estado para saber en qué pregunta estamos (índice 0 a 13)
   const [preguntaActual, setPreguntaActual] = useState(0);
-
   // Función para guardar la respuesta y avanzar automáticamente a la siguiente
   const responderYAvanzar = (id: number, valor: string) => {
-    handleChecklistChange(id, 'respuesta', valor);
-    
+    handleChecklistChange(id, 'respuesta', valor); 
     // Le damos un pequeño retardo (350ms) para que el usuario vea qué seleccionó antes de cambiar de pantalla
     if (preguntaActual < checklist.length - 1) {
       setTimeout(() => setPreguntaActual(preguntaActual + 1), 350);
     }
   };
-
-
-
-
-
-
   const [formulariosAcumulados, setFormulariosAcumulados] = useState<any[]>([]);
   const limpiarFormulario = () => {
-
     setPreguntaActual(0);
   // Reiniciamos checklist, fotos y GPS. 
   // Puedes decidir si mantener el mismo "Sector" y "Tramo" o reiniciarlos también.
@@ -308,11 +313,9 @@ const procesarFormularioActual = async () => {
       });
       mapImage = canvas.toDataURL("image/png");
     }
-
     // 3. Preparar todos los datos locales para el PDF
     const sectorFinal = formData.sector === "Otro" ? sectorPersonalizado : formData.sector;
     const tramoFinal = formData.sector === "Otro" ? tramoPersonalizado : formData.Tramo;
-
     const formularioCompleto = {
       formData: { ...formData, sector: sectorFinal, Tramo: tramoFinal },
       checklist: [...checklist],
@@ -321,13 +324,10 @@ const procesarFormularioActual = async () => {
       mapImage, 
       fechaCaptura: new Date()
     };
-
     const nuevosFormularios = [...formulariosAcumulados, formularioCompleto];
     setFormulariosAcumulados(nuevosFormularios);
-
     // 4. Preguntar si desea hacer otro formulario
     const agregarOtro = window.confirm("Formulario guardado en la BD exitosamente.\n\n¿Deseas llenar OTRO formulario para incluirlo en el MISMO PDF?");
-
     if (agregarOtro) {
       // Limpiamos pantalla para capturar el siguiente
       limpiarFormulario();
@@ -335,19 +335,15 @@ const procesarFormularioActual = async () => {
     } else {
       // Si no quiere agregar más, generamos el PDF con todos los acumulados
       await generarPDFMultiples(nuevosFormularios);
-      
       // Reiniciamos todo para un reporte completamente nuevo
       setFormulariosAcumulados([]);
       limpiarFormulario();
     }
-
   } catch (error) {
     console.error("Error en el proceso:", error);
     alert("Hubo un error al procesar el formulario.");
   }
 };
-
-
   const formRef = useRef<HTMLDivElement>(null); 
   
   const handleChecklistChange = (id: number, field: keyof ChecklistItem, value: string) => {
@@ -357,21 +353,17 @@ const procesarFormularioActual = async () => {
       )
     );
   };
-
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
-
   const handlePuntoChange = (id: number, field: keyof Punto, value: string) => {
     setPuntos(puntos.map(p => p.id === id ? { ...p, [field]: value } : p));
   };
-
   const agregarFila = () => {
     const nuevoId = puntos.length + 1;
     setPuntos([...puntos, { id: nuevoId, punto: `P00${nuevoId}`, norte: '', este: '', elev: '', desc: '' }]);
   };
-
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, tipo: string) => {
     if (e.target.files && e.target.files[0]) {
       const url = URL.createObjectURL(e.target.files[0]);
@@ -379,29 +371,30 @@ const procesarFormularioActual = async () => {
       else setFotos({ ...fotos, [tipo]: url });
     }
   };
-
-
-
 const guardarCuestionario = async () => {
   try {
-    // Resolver valores finales igual que en generarPDF
     const sectorFinal = formData.sector === "Otro" ? sectorPersonalizado : formData.sector;
     const tramoFinal = formData.sector === "Otro" ? tramoPersonalizado : formData.Tramo;
 
     const formDataFinal = {
       ...formData,
-      sector: sectorFinal,   // ← reemplaza "Otro" con el texto real
-      Tramo: tramoFinal       // ← reemplaza con el tramo personalizado
+      sector: sectorFinal,
+      Tramo: tramoFinal
     };
-
-    await crearReporte(formDataFinal, checklist, gps);
-    alert("¡Reporte guardado exitosamente en la base de datos!");
+    if (reporteParaEditar?.id) {
+      // ← MODO EDICIÓN: actualiza el registro existente
+      await actualizarReporte(reporteParaEditar.id.toString(), formDataFinal, checklist, gps);
+      alert("¡Reporte actualizado exitosamente!");
+    } else {
+      // ← MODO CREACIÓN: inserta un nuevo registro
+      await crearReporte(formDataFinal, checklist, gps);
+      alert("¡Reporte guardado exitosamente en la base de datos!");
+    }
   } catch (error) {
     console.error("Error al guardar el cuestionario:", error);
     alert("Hubo un error al guardar el reporte.");
   }
 };
-
  const generarPDFMultiples = async (listaFormularios: any[]) => {
   const doc = new jsPDF("p", "mm", "a4");
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -425,24 +418,18 @@ const guardarCuestionario = async () => {
       pdfDoc.restoreGraphicsState();
     }
   };
-
   const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
   const folioFinal = `REV-MULTIPLE-${random}`;
-
   // Iteramos sobre todos los formularios guardados
   for (let index = 0; index < listaFormularios.length; index++) {
     const form = listaFormularios[index];
-    
     // Si no es el primer formulario, agregamos una nueva página
     if (index > 0) doc.addPage();
-
     const margin = 15;
-    let y = 20;
-    
+    let y = 20;   
     const fechaFormateada = form.fechaCaptura.toLocaleDateString("es-MX", { day: "2-digit", month: "2-digit", year: "numeric" });
     const horaFormateada = form.fechaCaptura.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
     const ubicacionTexto = form.gps.lat && form.gps.lon ? `Lat: ${form.gps.lat}  |  Lon: ${form.gps.lon}` : "No capturada";
-
     // ================= ENCABEZADO =================
     doc.setFont("helvetica", "bold");
     doc.setFontSize(14);
@@ -453,7 +440,6 @@ const guardarCuestionario = async () => {
     doc.setLineWidth(0.6);
     doc.line(margin, y, pageWidth - margin, y);
     y += 8;
-
     // ================= DATOS GENERALES =================
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
@@ -471,9 +457,6 @@ const guardarCuestionario = async () => {
     doc.text(`TIPO DE MANTENIMIENTO: ${form.formData.tipoMantenimiento?.toUpperCase() || "NO ESPECIFICADO"}`, margin, y);
     doc.setFont("helvetica", "normal");
     y += 6;
-
-
-
     // ================= SECCIÓN DE CHECKLIST =================
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
@@ -494,7 +477,6 @@ const guardarCuestionario = async () => {
         item.id, item.pregunta, item.respuesta === "SI" ? "X" : "", item.respuesta === "NO" ? "X" : "", item.observacion || ""
       ]);
     });
-
     autoTable(doc, {
       startY: y,
       head: [["No.", "Concepto Evaluado", "Cumple", "No Cumple", "Observaciones"]],
@@ -504,11 +486,9 @@ const guardarCuestionario = async () => {
       headStyles: { fillColor: [30, 30, 30], textColor: 255, fontStyle: "bold", halign: "center" },
       columnStyles: { 0: { cellWidth: 12, halign: "center" }, 1: { cellWidth: 110 }, 2: { cellWidth: 20, halign: "center" }, 3: { cellWidth: 20, halign: "center" } }
     });
-
     y = (doc as any).lastAutoTable.finalY + 10;
     y += 6;
-    doc.text(`Ubicación: ${ubicacionTexto}`, margin, y);
-    
+    doc.text(`Ubicación: ${ubicacionTexto}`, margin, y);  
     // ================= MAPA EN PDF =================
     if (form.mapImage) {
       doc.addPage();
@@ -517,7 +497,6 @@ const guardarCuestionario = async () => {
       doc.text(`MAPA DE UBICACIÓN (Reg. ${index + 1})`, margin, 20);
       doc.addImage(form.mapImage, "PNG", margin, 30, pageWidth - margin * 2, 90);
     }
-
     // ================= EVIDENCIA FOTOGRÁFICA =================
     const imagenes = Object.entries(form.fotos).filter(([_, value]) => value !== null) as [string, string][];
     if (imagenes.length > 0) {
@@ -564,14 +543,11 @@ const guardarCuestionario = async () => {
       }
     }
   }
-
   // ================= APLICAR MARCA DE AGUA SOBRE TODO AL FINAL =================
   aplicarMarcaDeAguaFinal(doc);
-
   // Guardar PDF
   doc.save(`${folioFinal}.pdf`);
 };
-
   return (
     <div className="relative">
       <div className="max-w-5xl mx-auto font-sans bg-[#eef2f6] p-4 sm:p-8 space-y-6 text-gray-700">
@@ -604,7 +580,6 @@ const guardarCuestionario = async () => {
               </div>
             </div>
           </header>
-
           {/* ===== SECTOR Y TRAMO ===== */}
           <div className="w-full max-w-4xl mx-auto">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-6 px-4 sm:px-6 py-4 
@@ -653,7 +628,6 @@ const guardarCuestionario = async () => {
                   />
                 )}
               </div>
-
               {/* Tramo */}
               <div className="flex flex-col gap-2 w-full sm:w-1/3">
                 <label className="text-xs tracking-wider uppercase text-gray-500 font-semibold">
@@ -715,10 +689,8 @@ const guardarCuestionario = async () => {
                              focus:border-[#e67e22]"
                 />
               </div>
-
             </div>
           </div>
-
           {/* NUEVO: Tipo de Mantenimiento */}
           <div className="flex flex-col gap-2">
             <label className="text-xs tracking-wider uppercase text-emerald-700 font-bold">
@@ -739,7 +711,6 @@ const guardarCuestionario = async () => {
               <option value="Programable">🗓️ Programable</option>
             </select>
           </div>
-
 {/*____________________________________________________________________________________________________________________________________________________________________*/}
           <section className="grid md:grid-cols-2 gap-8">
             {/* === MAPA === */}
@@ -840,7 +811,6 @@ const guardarCuestionario = async () => {
                   </>
                 )}
               </button>
-
               <p className="text-xs text-center mt-3 font-semibold">
                 Precisión:{" "}
                 <span className={parseFloat(gps.precision) > 50 ? "text-red-600" : "text-emerald-700"}>
@@ -853,7 +823,7 @@ const guardarCuestionario = async () => {
           <section className="bg-white rounded-xl shadow-sm p-4 sm:p-6 border border-gray-200 max-w-2xl mx-auto w-full">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-[#d35400] font-bold uppercase text-xs sm:text-sm">
-                REVISIÓN GENERAL - ALUMBRADO PÚBLICO
+                {formData.categoria}  {/* ← CAMBIAR el texto hardcodeado por esta variable */}
               </h2>
               <span className="text-xs font-bold bg-slate-100 px-3 py-1 rounded-full text-slate-600">
                 {preguntaActual + 1} de {checklist.length}
@@ -961,8 +931,6 @@ const guardarCuestionario = async () => {
             </div>
           </section>
 {/*____________________________________________________________________________________________________________________________________________________________________*/}
-
-
           <section className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
             <h2 className="text-[#d35400] font-bold mb-4 flex items-center gap-2 uppercase text-sm">
               <FaCamera size={18}/> Evidencia Fotográfica y Observaciones
@@ -1011,7 +979,6 @@ const guardarCuestionario = async () => {
             </div>
           </section>
         </div>
-
         <footer className="flex flex-col md:flex-row justify-center gap-6 pt-6 border-t">
           <button
             onClick={procesarFormularioActual}
@@ -1033,7 +1000,6 @@ const guardarCuestionario = async () => {
     </div>
   );
 };
-
 export default FormularioAlumbrado;
 
 

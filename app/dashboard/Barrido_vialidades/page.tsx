@@ -56,6 +56,8 @@ interface FormData {
   sector: string;
   Tramo: string;
   accesoPublico: string;
+  categoria: string; 
+
 }
 
 interface Punto {
@@ -149,7 +151,9 @@ const BarridoVialidades: React.FC<FormularioProps> = ({ reportesIniciales }) => 
     notas: 'Trabajo realizado sin incidencias relevantes...',
     sector: '',
     Tramo: '',
-    accesoPublico: ""
+    accesoPublico: "",
+    categoria: 'BARRIDO VIALIDADES'  
+
   });
 
   const [gps, setGps] = useState<GpsCoords>({ lat: null, lon: null, precision: '--' });
@@ -793,9 +797,9 @@ const generarPDFMultiples = async (listaFormularios: any[]) => {
        {/*_____________________________CUESTIONARIO (MODO WIZARD)_________________________________*/}
 <section className="bg-white rounded-xl shadow-sm p-4 sm:p-6 border border-gray-200 max-w-2xl mx-auto w-full">
   <div className="flex justify-between items-center mb-4">
-    <h2 className="text-[#d35400] font-bold uppercase text-xs sm:text-sm">
-                REVISIÓN GENERAL - BARRIDO VIALIDADES
-    </h2>
+              <h2 className="text-[#d35400] font-bold uppercase text-xs sm:text-sm">
+                {formData.categoria}  {/* ← CAMBIAR el texto hardcodeado por esta variable */}
+              </h2>
     <span className="text-xs font-bold bg-slate-100 px-3 py-1 rounded-full text-slate-600">
       {preguntaActual + 1} de {checklist.length}
     </span>

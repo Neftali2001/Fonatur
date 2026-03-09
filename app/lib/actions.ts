@@ -3,10 +3,9 @@
 import { sql } from '@vercel/postgres';
 import { revalidatePath } from 'next/cache';
 
-// 1️⃣ MODIFICACIÓN: Agregamos "categoria" como parámetro (por defecto le pongo 'Alumbrado_publico' por si acaso)
-export async function crearReporte(formData: any, checklist: any, gps: any, categoria: string = 'Alumbrado_publico') {
+// ✅ Ya no necesita "categoria" como parámetro separado — viene dentro de formData
+export async function crearReporte(formData: any, checklist: any, gps: any) {
   
-  // ✅ FIX 1: Fecha en formato correcto
   const ahora = new Date();
   
   const fechaMX = ahora.toLocaleDateString('es-MX', {
@@ -34,6 +33,9 @@ export async function crearReporte(formData: any, checklist: any, gps: any, cate
   const latitud  = gps?.lat ? parseFloat(gps.lat) : null;
   const longitud = gps?.lon ? parseFloat(gps.lon) : null;
 
+  // ✅ Se lee desde formData; si no viene, usa 'General' como fallback
+  const categoria = formData.categoria || 'General';
+
   try {
     await sql`
       INSERT INTO reportes_alumbrado (
@@ -46,7 +48,7 @@ export async function crearReporte(formData: any, checklist: any, gps: any, cate
         longitud, 
         checklist, 
         fecha,
-        categoria -- 👈 A) Agregamos la columna de categoría
+        categoria
       )
       VALUES (
         ${folio}, 
@@ -58,7 +60,7 @@ export async function crearReporte(formData: any, checklist: any, gps: any, cate
         ${longitud}, 
         ${JSON.stringify(checklist)},
         NOW(),
-        ${categoria} -- 👈 B) Insertamos la categoría (ej: 'Areas_verdes')
+        ${categoria}
       )
     `;
   } catch (error) {
@@ -69,32 +71,32 @@ export async function crearReporte(formData: any, checklist: any, gps: any, cate
   revalidatePath('/dashboard/Historial');
 }
 
-// 2️⃣ NUEVO: Función para ACTUALIZAR un reporte existente
 export async function actualizarReporte(id: string, formData: any, checklist: any, gps: any) {
-  const sectorFinal = formData.sector === 'Otro' 
-    ? formData.sectorPersonalizado 
+  const sectorFinal = formData.sector === 'Otro'
+    ? formData.sectorPersonalizado
     : formData.sector;
-    
-  const tramoFinal = formData.sector === 'Otro' 
-    ? formData.tramoPersonalizado 
+
+  const tramoFinal = formData.sector === 'Otro'
+    ? formData.tramoPersonalizado
     : formData.Tramo;
 
   const tipoMantenimiento = formData.tipoMantenimiento || 'Ordinario';
   const latitud  = gps?.lat ? parseFloat(gps.lat) : null;
   const longitud = gps?.lon ? parseFloat(gps.lon) : null;
+  const categoria = formData.categoria || 'General'; // ← también actualiza categoría
 
   try {
-    // Nota: Aquí no actualizamos ni el folio, ni la fecha, ni la categoría porque eso no suele cambiar
     await sql`
       UPDATE reportes_alumbrado
-      SET 
-        sector = ${sectorFinal ?? ''}, 
-        tramo = ${tramoFinal ?? ''}, 
-        acceso_publico = ${formData.accesoPublico || ''}, 
-        tipo_mantenimiento = ${tipoMantenimiento}, 
-        latitud = ${latitud}, 
-        longitud = ${longitud}, 
-        checklist = ${JSON.stringify(checklist)}
+      SET
+        sector             = ${sectorFinal ?? ''},
+        tramo              = ${tramoFinal ?? ''},
+        acceso_publico     = ${formData.accesoPublico || ''},
+        tipo_mantenimiento = ${tipoMantenimiento},
+        latitud            = ${latitud},
+        longitud           = ${longitud},
+        checklist          = ${JSON.stringify(checklist)},
+        categoria          = ${categoria}
       WHERE id = ${id}
     `;
   } catch (error) {
@@ -105,21 +107,19 @@ export async function actualizarReporte(id: string, formData: any, checklist: an
   revalidatePath('/dashboard/Historial');
 }
 
-// 3️⃣ NUEVO: Función para OBTENER un reporte (útil para rellenar el formulario al editar)
 export async function obtenerReportePorId(id: string) {
   try {
     const data = await sql`
       SELECT * FROM reportes_alumbrado 
       WHERE id = ${id}
     `;
-    return data.rows[0]; // Retorna el reporte si existe
+    return data.rows[0];
   } catch (error) {
     console.error('Error al obtener reporte:', error);
     throw new Error('Fallo al obtener los datos del reporte.');
   }
 }
 
-// La función eliminar se queda exactamente igual
 export async function eliminarReporte(id: string) {
   try {
     await sql`DELETE FROM reportes_alumbrado WHERE id = ${id}`;
@@ -129,7 +129,6 @@ export async function eliminarReporte(id: string) {
     throw new Error('Fallo al eliminar el reporte.');
   }
 }
-
 
 // 'use server';
 
