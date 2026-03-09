@@ -7,7 +7,6 @@ import {
   FaCube, FaListOl, FaChartPie, FaEraser, FaFilePdf, FaTrash, FaUndo 
 } from 'react-icons/fa';
 
-import { useSearchParams } from 'next/navigation';
 
 import SignatureCanvas from 'react-signature-canvas';
 import jsPDF from "jspdf";
@@ -98,18 +97,10 @@ const FormularioAlumbrado: React.FC<FormularioProps> = ({ reportesIniciales }) =
   const router = useRouter();
   const mapRef = useRef<HTMLDivElement>(null);
   const [currentTime, setCurrentTime] = useState('');
-    const searchParams = useSearchParams(); // 2. Inicializa searchParams
-      const editId = searchParams.get('editId'); // Obtiene el ID de la URL si existe
-
-
-
-
 
 
   // ... otros estados ...
 const [reportesPrevios, setReportesPrevios] = useState<any[]>([]);
-
-
 
 
   useEffect(() => {
@@ -149,7 +140,6 @@ useEffect(() => {
   return () => clearInterval(interval);
 }, []);
   
-
   const [formData, setFormData] = useState<FormData>({
     proyecto: 'Levantamiento Topográfico para playas...',
     cliente: 'Fonatur',

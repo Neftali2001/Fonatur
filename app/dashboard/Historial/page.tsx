@@ -13,6 +13,7 @@ interface ReporteAlumbrado {
   tramo: string;
   latitud: string | null;
   longitud: string | null;
+  categoria: string;
 }
 
 interface HistorialPageProps {
@@ -188,10 +189,11 @@ export default async function HistorialPage({ searchParams }: HistorialPageProps
                 </div>
 
                 <div className="flex gap-3 justify-end md:px-6 md:py-4 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                  {/* CORRECCIÓN: Usamos Link en lugar de button+router.push */}
                   <Link
-                    href={`/dashboard/Alumbrado_publico?editId=${reporte.id}`}
-                    className="p-2 md:p-2.5 text-blue-600 bg-blue-50 hover:bg-blue-100 md:bg-transparent md:hover:bg-blue-50 rounded-lg transition-colors"
+                    // Dinámicamente cambiamos la ruta basada en la categoría
+                    // Ejemplo: si categoria es 'barrido', irá a /dashboard/Barrido?editId=...
+                    href={`/dashboard/${reporte.categoria}?editId=${reporte.id}`}
+                    className="p-2 md:p-2.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
                     title="Editar"
                   >
                     <FaEdit size={16} />
