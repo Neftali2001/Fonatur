@@ -79,11 +79,20 @@ interface Fotos {
   [key: string]: string | null;
 }
 
+interface GeoRef {
+  lat: string;
+  lon: string;
+  precision: string;
+  timestamp: string; // hora de captura legible
+}
+
+
 interface ChecklistItem {
   id: number;
   pregunta: string;
   respuesta: string;
   observacion: string;
+  geoRef?: GeoRef | null;
 }
 
 interface PrintSigs {
@@ -103,6 +112,7 @@ const parsearChecklist = (raw: any): ChecklistItem[] | null => {
         ...item,
         respuesta: (item.respuesta ?? '').toUpperCase(),
         observacion: item.observacion ?? '',
+        geoRef: item.geoRef ?? null,
       }));
     }
     return null;
@@ -121,7 +131,8 @@ const FormularioAlumbrado: React.FC<FormularioProps> = ({ reportesIniciales, rep
 const [reportesPrevios, setReportesPrevios] = useState<any[]>([]);
 
 
-
+  const [capturandoGeoRefId, setCapturandoGeoRefId] = useState<number | null>(null);
+  const geoRefWatchId = useRef<number | null>(null);
 
   useEffect(() => {
   const loadLeaflet = async () => {
@@ -235,6 +246,66 @@ useEffect(() => {
     }
   };
 
+   const capturarGeoRefItem = (itemId: number) => {
+    if (!navigator.geolocation) return alert("GPS no soportado en este dispositivo.");
+    setCapturandoGeoRefId(itemId);
+
+    const options = { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 };
+
+    const onSuccess = (pos: GeolocationPosition) => {
+      const { latitude, longitude, accuracy } = pos.coords;
+
+      // Hora de captura legible en español
+      const ahora = new Date();
+      const timestamp = ahora.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+      const geoRef: GeoRef = {
+        lat: latitude.toFixed(6),
+        lon: longitude.toFixed(6),
+        precision: `${accuracy.toFixed(1)}m`,
+        timestamp,
+      };
+
+      // Guardamos el geoRef en el ítem correspondiente del checklist
+      setChecklist(prev =>
+        prev.map(item => item.id === itemId ? { ...item, geoRef } : item)
+      );
+
+      if (geoRefWatchId.current !== null) {
+        navigator.geolocation.clearWatch(geoRefWatchId.current);
+        geoRefWatchId.current = null;
+      }
+      setCapturandoGeoRefId(null);
+    };
+
+    const onError = () => {
+      setCapturandoGeoRefId(null);
+      alert("No se pudo obtener la ubicación. Verifica que el GPS esté activo.");
+    };
+
+    geoRefWatchId.current = navigator.geolocation.watchPosition(onSuccess, onError, options);
+    // Timeout de seguridad
+    setTimeout(() => {
+      if (geoRefWatchId.current !== null) {
+        navigator.geolocation.clearWatch(geoRefWatchId.current);
+        geoRefWatchId.current = null;
+        setCapturandoGeoRefId(null);
+      }
+    }, 12000);
+  };
+
+  const limpiarGeoRefItem = (itemId: number) => {
+    setChecklist(prev =>
+      prev.map(item => item.id === itemId ? { ...item, geoRef: null } : item)
+    );
+  };
+
+
+
+
+
+
+
   const [clima, setClima] = useState<string>('Soleado');
   const [sistemaCoords, setSistemaCoords] = useState<string>('UTM WGS84');
   const [puntos, setPuntos] = useState<Punto[]>([{ id: 1, punto: 'P001', norte: '2286612.458', este: '612902.776', elev: '1586.921', desc: '' }]);
@@ -249,14 +320,14 @@ useEffect(() => {
   const [printSigs, setPrintSigs] = useState<PrintSigs>({ topografo: null, cliente: null });
 
   const tramosPorSector: Record<string, string[]> = {
-    "Barra de Coyuca": ["Sendero Seguro-Barra Coyuca"],
-    "Pie Cuesta": ["Sendero seguro-Pie cuesta"],
-    "Barrios Historicos": ["Caleta-caletilla", "Sendero", "Costera-antigua", "Corredor Zocalo-quebrada", "Corredor zocalo-fuerte"],
-    "Acapulco Tradicional": ["Sendero Tadeo arredondo", "Sendero cinerio-hornitos", "Michoacan", "Av. Universidad", "Dr. Ignacio chavez"],
+    "Barra de Coyuca": ["Sendero-Seguro-Barra Coyuca"],
+    "Pie de la Cuesta": ["Sendero-seguro-Pie de la cuesta"],
+    "Barrios Historicos": ["Caleta-caletilla", "Sendero-Costera-antigua", "Corredor Zocalo-quebrada", "Corredor zocalo-fuerte"],
+    "Acapulco Tradicional": ["Sendero-Tadeo-arredondo", "Sendero-cinerio-hornitos", "Michoacan", "Av. Universidad", "Dr. Ignacio chavez"],
     "Acapulco Dorado": ["Costa azul"],
     "Las Brisas": [""],
-    "Puérto Marquez": ["Sendero-Puerto Marquez"],
-    "Diamante": ["Av. Costera Palmas"],
+    "Puerto Márquez": ["Sendero-Puerto-Marquez"],
+    "Acapulco Diamante": ["Av. Costera Palmas"],
     "Otro": [""]
   };
   
@@ -288,7 +359,8 @@ const [checklist, setChecklist] = useState<ChecklistItem[]>(
     id: i + 1,
     pregunta: p,
     respuesta: "",
-    observacion: ""
+    observacion: "",
+    geoRef: null,
   }))
 );
 
@@ -316,7 +388,8 @@ const [checklist, setChecklist] = useState<ChecklistItem[]>(
       id: i + 1,
       pregunta: p,
       respuesta: "",
-      observacion: ""
+      observacion: "",
+      geoRef: null
     }))
   );
   setFotos({ Foto1: null, Foto2: null, Foto3: null, Foto4: null, Foto5: null, Foto6: null });
@@ -432,52 +505,65 @@ const guardarCuestionario = async () => {
     alert("Hubo un error al guardar el reporte.");
   }
 };
- const generarPDFMultiples = async (listaFormularios: any[]) => {
+const generarPDFMultiples = async (listaFormularios: any[]) => {
   const doc = new jsPDF("p", "mm", "a4");
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
+  const pageWidth = doc.internal.pageSize.getWidth();   // 210mm
+  const pageHeight = doc.internal.pageSize.getHeight(); // 297mm
+  const margin = 15;
+  // Ancho útil = 210 - 15 - 15 = 180mm  ← todas las tablas deben sumar esto
 
-  // Función para la marca de agua (Se ejecuta AL FINAL)
+  // ================= MARCA DE AGUA (al final) =================
   const aplicarMarcaDeAguaFinal = (pdfDoc: any) => {
     const totalPaginas = pdfDoc.internal.getNumberOfPages();
     for (let i = 1; i <= totalPaginas; i++) {
       pdfDoc.setPage(i);
       pdfDoc.saveGraphicsState();
-      // Opacidad para que se mezcle sobre las fotos/textos sin ocultarlos del todo
       pdfDoc.setGState(new (pdfDoc as any).GState({ opacity: 0.15 }));
-      
-      const imgWidth = 140; 
+      const imgWidth = 140;
       const imgHeight = 40;
-      const x = (pageWidth - imgWidth) / 2;
-      const yPos = (pageHeight - imgHeight) / 2;
-
-      pdfDoc.addImage("/logo_fonatur.png", 'PNG', x, yPos, imgWidth, imgHeight);
+      pdfDoc.addImage(
+        "/logo_fonatur.png", "PNG",
+        (pageWidth - imgWidth) / 2,
+        (pageHeight - imgHeight) / 2,
+        imgWidth, imgHeight
+      );
       pdfDoc.restoreGraphicsState();
     }
   };
-  const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+
+  const random = Math.floor(Math.random() * 1000).toString().padStart(3, "0");
   const folioFinal = `REV-MULTIPLE-${random}`;
-  // Iteramos sobre todos los formularios guardados
+
   for (let index = 0; index < listaFormularios.length; index++) {
     const form = listaFormularios[index];
-    // Si no es el primer formulario, agregamos una nueva página
     if (index > 0) doc.addPage();
-    const margin = 15;
-    let y = 20;   
-    const fechaFormateada = form.fechaCaptura.toLocaleDateString("es-MX", { day: "2-digit", month: "2-digit", year: "numeric" });
-    const horaFormateada = form.fechaCaptura.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
-    const ubicacionTexto = form.gps.lat && form.gps.lon ? `Lat: ${form.gps.lat}  |  Lon: ${form.gps.lon}` : "No capturada";
-    // ================= ENCABEZADO =================
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
+
+    let y = 20;
+    const fechaFormateada = form.fechaCaptura.toLocaleDateString("es-MX", {
+      day: "2-digit", month: "2-digit", year: "numeric",
+    });
+    const horaFormateada = form.fechaCaptura.toLocaleTimeString("es-MX", {
+      hour: "2-digit", minute: "2-digit",
+    });
+    const ubicacionTexto =
+      form.gps.lat && form.gps.lon
+        ? `Lat: ${form.gps.lat}  |  Lon: ${form.gps.lon}`
+        : "No capturada";
+
+    // ── ENCABEZADO ──────────────────────────────────────────────
     y += 6;
-    doc.setFontSize(16);
-    doc.text(`REPORTE DE MANTENIMIENTO CIP ACAPULCO-COYUCA (Reg. ${index + 1})`, margin, y);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.text(
+      `REPORTE DE MANTENIMIENTO CIP ACAPULCO-COYUCA (Reg. ${index + 1})`,
+      margin, y
+    );
     y += 4;
     doc.setLineWidth(0.6);
     doc.line(margin, y, pageWidth - margin, y);
     y += 8;
-    // ================= DATOS GENERALES =================
+
+    // ── DATOS GENERALES ─────────────────────────────────────────
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
     doc.text(`Folio Interno: ${folioFinal}-${index + 1}`, margin, y);
@@ -488,90 +574,215 @@ const guardarCuestionario = async () => {
     y += 6;
     doc.text(`Tramo: ${form.formData.Tramo}`, margin, y);
     y += 6;
-    doc.text(`Acceso público a playa: ${form.formData.accesoPublico || "No especificado"}`, margin, y);
+    doc.text(
+      `Acceso público a playa: ${form.formData.accesoPublico || "No especificado"}`,
+      margin, y
+    );
     y += 6;
     doc.setFont("helvetica", "bold");
-    doc.text(`TIPO DE MANTENIMIENTO: ${form.formData.tipoMantenimiento?.toUpperCase() || "NO ESPECIFICADO"}`, margin, y);
+    doc.text(
+      `TIPO DE MANTENIMIENTO: ${form.formData.tipoMantenimiento?.toUpperCase() || "NO ESPECIFICADO"}`,
+      margin, y
+    );
     doc.setFont("helvetica", "normal");
-    y += 6;
-    // ================= SECCIÓN DE CHECKLIST =================
+    y += 8;
+
+    // ── CHECKLIST ───────────────────────────────────────────────
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
     doc.text("1. LISTA DE VERIFICACIÓN – ALUMBRADO PÚBLICO", margin, y);
     y += 5;
 
+    /*
+      Anchos columnas (deben sumar exactamente 180mm = ancho útil):
+        No.          →  10
+        Concepto     →  88
+        Cumple       →  16
+        No Cumple    →  16
+        Observaciones→  50
+                        ───
+                        180  ✓
+    */
     const tableData: any[] = [];
-    form.checklist.forEach((item: any) => {
+    form.checklist.forEach((item: ChecklistItem) => {
+      // Separador visual "ESTADO FÍSICO" antes del ítem 9
       if (item.id === 9) {
         tableData.push([
-          { content: "ESTADO FÍSICO", colSpan: 2, styles: { halign: 'center', fillColor: [0, 0, 0], textColor: [255, 255, 255], fontStyle: 'bold' } },
-          { content: "Bueno", styles: { halign: 'center', fillColor: [0, 0, 0], textColor: [255, 255, 255], fontStyle: 'bold' } },
-          { content: "Malo", styles: { halign: 'center', fillColor: [0, 0, 0], textColor: [255, 255, 255], fontStyle: 'bold' } },
-          { content: "Observaciones", styles: { halign: 'center', fillColor: [0, 0, 0], textColor: [255, 255, 255], fontStyle: 'bold' } }
+          {
+            content: "ESTADO FÍSICO",
+            colSpan: 2,
+            styles: { halign: "center", fillColor: [30, 30, 30], textColor: [255, 255, 255], fontStyle: "bold" },
+          },
+          {
+            content: "Bueno",
+            styles: { halign: "center", fillColor: [30, 30, 30], textColor: [255, 255, 255], fontStyle: "bold" },
+          },
+          {
+            content: "Malo",
+            styles: { halign: "center", fillColor: [30, 30, 30], textColor: [255, 255, 255], fontStyle: "bold" },
+          },
+          {
+            content: "Observaciones",
+            styles: { halign: "center", fillColor: [30, 30, 30], textColor: [255, 255, 255], fontStyle: "bold" },
+          },
         ]);
       }
+
+      // ✅ Una sola columna de observaciones: texto + geoRef si existe
+      // (antes se empujaban dos columnas por error)
+      const obsTexto = item.observacion || "";
+      const geoTexto = item.geoRef
+        ? `Lat: ${item.geoRef.lat}\nLon: ${item.geoRef.lon}\n±${item.geoRef.precision} — ${item.geoRef.timestamp}`
+        : "";
+      const obsConGeoRef = [obsTexto, geoTexto].filter(Boolean).join("\n");
+
       tableData.push([
-        item.id, item.pregunta, item.respuesta === "SI" ? "X" : "", item.respuesta === "NO" ? "X" : "", item.observacion || ""
+        item.id,
+        item.pregunta,
+        item.respuesta === "SI" ? "X" : "",
+        item.respuesta === "NO" ? "X" : "",
+        obsConGeoRef,
       ]);
     });
+
     autoTable(doc, {
       startY: y,
-      head: [["No.", "Concepto Evaluado", "Cumple", "No Cumple", "Observaciones"]],
+      margin: { left: margin, right: margin }, // ← aplica márgenes a la tabla
+      head: [["No.", "Concepto Evaluado", "Cumple", "No Cumple", "Observaciones / Geo-ref"]],
       body: tableData,
       theme: "grid",
-      styles: { fontSize: 8, cellPadding: 3, valign: "top", lineWidth: 0.2 },
+      styles: { fontSize: 8, cellPadding: 3, valign: "top", lineWidth: 0.2, overflow: "linebreak" },
       headStyles: { fillColor: [30, 30, 30], textColor: 255, fontStyle: "bold", halign: "center" },
-      columnStyles: { 0: { cellWidth: 12, halign: "center" }, 1: { cellWidth: 110 }, 2: { cellWidth: 20, halign: "center" }, 3: { cellWidth: 20, halign: "center" } }
+      columnStyles: {
+        0: { cellWidth: 10, halign: "center" },
+        1: { cellWidth: 88 },
+        2: { cellWidth: 16, halign: "center" },
+        3: { cellWidth: 16, halign: "center" },
+        4: { cellWidth: 50 },               // Total: 10+88+16+16+50 = 180 ✓
+      },
     });
-    y = (doc as any).lastAutoTable.finalY + 10;
-    y += 6;
-    doc.text(`Ubicación: ${ubicacionTexto}`, margin, y);  
-    // ================= MAPA EN PDF =================
+
+    y = (doc as any).lastAutoTable.finalY + 8;
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Ubicación general: ${ubicacionTexto}`, margin, y);
+
+    // ── GEO-REFERENCIAS (página propia si existen) ───────────────
+    /*
+      Anchos columnas (180mm):
+        No.       →  10
+        Concepto  →  80
+        Latitud   →  22
+        Longitud  →  22
+        Precisión →  22
+        Hora      →  24
+                      ───
+                      180  ✓
+    */
+    // const itemsConGeoRef = form.checklist.filter(
+    //   (item: ChecklistItem) => item.geoRef
+    // );
+    // if (itemsConGeoRef.length > 0) {
+    //   doc.addPage();
+    //   doc.setFont("helvetica", "bold");
+    //   doc.setFontSize(12);
+    //   doc.text(`2. GEO-REFERENCIAS DE INCIDENCIAS (Reg. ${index + 1})`, margin, 20);
+    //   doc.setFont("helvetica", "normal");
+    //   doc.setFontSize(9);
+    //   doc.text(
+    //     "Coordenadas específicas capturadas durante la inspección:",
+    //     margin, 28
+    //   );
+
+    //   autoTable(doc, {
+    //     startY: 33,
+    //     margin: { left: margin, right: margin },
+    //     head: [["No.", "Concepto", "Latitud", "Longitud", "Precisión", "Hora"]],
+    //     body: itemsConGeoRef.map((item: ChecklistItem) => [
+    //       item.id,
+    //       item.pregunta,
+    //       item.geoRef!.lat,
+    //       item.geoRef!.lon,
+    //       item.geoRef!.precision,
+    //       item.geoRef!.timestamp,
+    //     ]),
+    //     theme: "striped",
+    //     styles: { fontSize: 8, cellPadding: 3, overflow: "linebreak" },
+    //     headStyles: { fillColor: [20, 83, 45], textColor: 255, fontStyle: "bold", halign: "center" },
+    //     columnStyles: {
+    //       0: { cellWidth: 10, halign: "center" },
+    //       1: { cellWidth: 80 },
+    //       2: { cellWidth: 22, halign: "center" },
+    //       3: { cellWidth: 22, halign: "center" },
+    //       4: { cellWidth: 22, halign: "center" },
+    //       5: { cellWidth: 24, halign: "center" }, // Total: 10+80+22+22+22+24 = 180 ✓
+    //     },
+    //   });
+    // }
+
+    // ── MAPA ─────────────────────────────────────────────────────
     if (form.mapImage) {
       doc.addPage();
       doc.setFont("helvetica", "bold");
       doc.setFontSize(12);
-      doc.text(`MAPA DE UBICACIÓN (Reg. ${index + 1})`, margin, 20);
-      doc.addImage(form.mapImage, "PNG", margin, 28, pageWidth - margin * 2, 130, '', 'FAST');
-     doc.addImage(form.mapImage, "PNG", margin, 30, pageWidth - margin * 2, 120);    }
-     
-    // ================= EVIDENCIA FOTOGRÁFICA =================
-    const imagenes = Object.entries(form.fotos).filter(([_, value]) => value !== null) as [string, string][];
+      doc.text(`2. MAPA DE UBICACIÓN (Reg. ${index + 1})`, margin, 20);
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Ubicación: ${ubicacionTexto}`, margin, 27); // ← y fijo, no relativo
+      // Una sola llamada addImage (antes había dos superpuestas)
+      doc.addImage(
+        form.mapImage, "PNG",
+        margin, 33,
+        pageWidth - margin * 2, 120,
+        "", "FAST"
+      );
+    }
+
+    // ── EVIDENCIA FOTOGRÁFICA ────────────────────────────────────
+    const imagenes = Object.entries(form.fotos).filter(
+      ([_, value]) => value !== null
+    ) as [string, string][];
+
     if (imagenes.length > 0) {
       doc.addPage();
       let yImg = 20;
       doc.setFont("helvetica", "bold");
       doc.setFontSize(12);
-      doc.text(`4. EVIDENCIA FOTOGRÁFICA (Reg. ${index + 1})`, margin, yImg);
+      doc.text(`3. EVIDENCIA FOTOGRÁFICA (Reg. ${index + 1})`, margin, yImg);
       yImg += 12;
 
       const imgWidth = 80;
       const imgHeight = 60;
       const espacioX = 15;
-      const espacioY = 25;
+      const espacioY = 22;
       let xPosition = margin;
       let contador = 1;
 
       for (let i = 0; i < imagenes.length; i++) {
         const [tipo, base64] = imagenes[i];
+
         if (yImg + imgHeight > pageHeight - 30) {
           doc.addPage();
           yImg = 20;
           xPosition = margin;
         }
 
-        doc.rect(xPosition - 2, yImg - 2, imgWidth + 4, imgHeight + 4);
         const imgProps = doc.getImageProperties(base64);
         const ratio = Math.min(imgWidth / imgProps.width, imgHeight / imgProps.height);
         const newWidth = imgProps.width * ratio;
         const newHeight = imgProps.height * ratio;
 
+        doc.rect(xPosition, yImg, imgWidth, imgHeight); // marco sin desplazamiento extra
         doc.addImage(base64, "JPEG", xPosition, yImg, newWidth, newHeight);
         doc.setFont("helvetica", "normal");
         doc.setFontSize(8);
-        doc.text(`Figura ${contador}. Evidencia: ${tipo.toUpperCase()}`, xPosition, yImg + imgHeight + 6);
-        
+        doc.text(
+          `Figura ${contador}. ${tipo.toUpperCase()}`,
+          xPosition, yImg + imgHeight + 5
+        );
+
         contador++;
+        // Avanzar columna o saltar a nueva fila
         if (xPosition + imgWidth * 2 + espacioX <= pageWidth - margin) {
           xPosition += imgWidth + espacioX;
         } else {
@@ -581,9 +792,9 @@ const guardarCuestionario = async () => {
       }
     }
   }
-  // ================= APLICAR MARCA DE AGUA SOBRE TODO AL FINAL =================
+
+  // ── MARCA DE AGUA GLOBAL ─────────────────────────────────────
   aplicarMarcaDeAguaFinal(doc);
-  // Guardar PDF
   doc.save(`${folioFinal}.pdf`);
 };
   return (
@@ -946,6 +1157,65 @@ const guardarCuestionario = async () => {
                   onChange={(e) => handleChecklistChange(checklist[preguntaActual].id, "observacion", e.target.value)}
                   className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-[#e67e22]/50 focus:border-[#e67e22] outline-none transition-all text-sm"
                 />
+                                <div className="flex flex-col gap-2">
+                  {checklist[preguntaActual].geoRef ? (
+                    // ── Estado: ya tiene coordenadas ──
+                    <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2.5">
+                      <div className="flex items-center gap-2 text-emerald-700 text-xs font-semibold">
+                        {/* Pin icon inline SVG para no agregar otra dependencia */}
+                        <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z" />
+                        </svg>
+                        <span>
+                          {checklist[preguntaActual].geoRef!.lat}, {checklist[preguntaActual].geoRef!.lon}
+                          &nbsp;·&nbsp;±{checklist[preguntaActual].geoRef!.precision}
+                          &nbsp;·&nbsp;{checklist[preguntaActual].geoRef!.timestamp}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => limpiarGeoRefItem(checklist[preguntaActual].id)}
+                        className="ml-3 text-red-400 hover:text-red-600 transition-colors"
+                        title="Eliminar geo-referencia"
+                      >
+                        <FaTrash size={12} />
+                      </button>
+                    </div>
+                  ) : (
+                    // ── Estado: sin coordenadas aún ──
+                    <button
+                      type="button"
+                      onClick={() => capturarGeoRefItem(checklist[preguntaActual].id)}
+                      disabled={capturandoGeoRefId === checklist[preguntaActual].id}
+                      className={`w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border-2 text-sm font-semibold transition-all ${
+                        capturandoGeoRefId === checklist[preguntaActual].id
+                          ? "bg-slate-100 border-slate-300 text-slate-400 cursor-not-allowed"
+                          : "bg-white border-dashed border-slate-300 text-slate-500 hover:border-emerald-400 hover:text-emerald-600 hover:bg-emerald-50"
+                      }`}
+                    >
+                      {capturandoGeoRefId === checklist[preguntaActual].id ? (
+                        <>
+                          <FaSpinner className="animate-spin" size={14} />
+                          <span>Obteniendo ubicación...</span>
+                        </>
+                      ) : (
+                        <>
+                          {/* Pin icon */}
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z" />
+                          </svg>
+                          <span>Geo-referenciar esta incidencia</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+                {/* ── Ayuda contextual: se muestra solo si la respuesta es NO ── */}
+                {checklist[preguntaActual].respuesta === "NO" && !checklist[preguntaActual].geoRef && (
+                  <p className="text-[11px] text-amber-600 font-medium flex items-center gap-1">
+                    ⚠️ Incidencia detectada. Considera geo-referenciar la ubicación exacta del problema.
+                  </p>
+                )}
               </div>
             </div>
 
