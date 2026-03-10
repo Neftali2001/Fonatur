@@ -249,14 +249,14 @@ useEffect(() => {
   const [printSigs, setPrintSigs] = useState<PrintSigs>({ topografo: null, cliente: null });
 
   const tramosPorSector: Record<string, string[]> = {
-    "Barra de coyuca": ["Sendero seguro-Barra coyuca"],
-    "Pie cuesta": ["Sendero seguro", "Pie cuesta"],
-    "Barrios historicos": ["Caleta-caletilla", "Sendero", "Costera-antigua", "Corredor Zocalo-quebrada", "Corredor zocalo-fuerte"],
-    "Aca. Tradicional": ["Sendero Tadeo arredondo", "Sendero cinerio-hornitos", "Michoacan", "Av. Universidad", "Dr. Ignacio chavez", "Costa Azul"],
-    "Acapulco dorado": ["Costa azul"],
-    "Las brisas": [""],
-    "Puerto marquez": ["Sendero-Puerto marquez"],
-    "Diamante": ["Sendero Puerto marquez", "Av. Costera Palmas"],
+    "Barra de Coyuca": ["Sendero seguro", "Barra coyuca"],
+    "Pie Cuesta": ["Sendero seguro", "Pie cuesta"],
+    "Barrios Historicos": ["Caleta-caletilla", "Sendero", "Costera-antigua", "Corredor Zocalo-quebrada", "Corredor zocalo-fuerte"],
+    "Acapulco Tradicional": ["Sendero Tadeo arredondo", "Sendero cinerio-hornitos", "Michoacan", "Av. Universidad", "Dr. Ignacio chavez"],
+    "Acapulco Dorado": ["Costa azul"],
+    "Las Brisas": [""],
+    "Puérto Marquez": ["Sendero-Puerto Marquez"],
+    "Diamante": ["Av. Costera Palmas"],
     "Otro": [""]
   };
   
