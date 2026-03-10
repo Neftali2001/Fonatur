@@ -91,15 +91,36 @@ interface PrintSigs {
   cliente: string | null;
 }
 
+
+
+const parsearChecklist = (raw: any): ChecklistItem[] | null => {
+  if (!raw) return null;
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      // Normaliza respuestas a mayúsculas por si acaso
+      return parsed.map((item: any) => ({
+        ...item,
+        respuesta: (item.respuesta ?? '').toUpperCase(),
+        observacion: item.observacion ?? '',
+      }));
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
 // ================= COMPONENTE PRINCIPAL =================
 const FormularioAlumbrado: React.FC<FormularioProps> = ({ reportesIniciales, reporteParaEditar }) => {
   const router = useRouter();
   const mapRef = useRef<HTMLDivElement>(null);
   const [currentTime, setCurrentTime] = useState('');
 
-
   // ... otros estados ...
 const [reportesPrevios, setReportesPrevios] = useState<any[]>([]);
+
+
 
 
   useEffect(() => {
@@ -252,16 +273,13 @@ useEffect(() => {
     "MANTENIMIENTO A TRANSFORMADORES DE ALUMBRADO"
   ];
  
-const checklistGuardado: ChecklistItem[] | null =
-  reporteParaEditar?.checklist
-    ? (typeof reporteParaEditar.checklist === 'string'
-        ? JSON.parse(reporteParaEditar.checklist)
-        : reporteParaEditar.checklist)
-    : null;
 
-// 2️⃣ LUEGO el useState que la usa
+{/*____________________________________________________________________________________________________________________________________________________________________________ */}
+
+
+// 2️ useState con valor inicial
 const [checklist, setChecklist] = useState<ChecklistItem[]>(
-  checklistGuardado ??
+  parsearChecklist(reporteParaEditar?.checklist) ??
   preguntasAlumbrado.map((p, i) => ({
     id: i + 1,
     pregunta: p,
@@ -269,6 +287,13 @@ const [checklist, setChecklist] = useState<ChecklistItem[]>(
     observacion: ""
   }))
 );
+
+{/*____________________________________________________________________________________________________________________________________________________________________________ */}
+
+
+
+
+
 
   // Estado para saber en qué pregunta estamos (índice 0 a 13)
   const [preguntaActual, setPreguntaActual] = useState(0);
@@ -819,6 +844,8 @@ const guardarCuestionario = async () => {
               </p>
             </div>
           </section>
+
+
 {/*_____________________________CUESTIONARIO (MODO WIZARD)_________________________________*/}
           <section className="bg-white rounded-xl shadow-sm p-4 sm:p-6 border border-gray-200 max-w-2xl mx-auto w-full">
             <div className="flex justify-between items-center mb-4">

@@ -110,10 +110,19 @@ export async function actualizarReporte(id: string, formData: any, checklist: an
 export async function obtenerReportePorId(id: string) {
   try {
     const data = await sql`
-      SELECT * FROM reportes_alumbrado 
-      WHERE id = ${id}
+      SELECT *, checklist::text as checklist_raw  
+      FROM reportes_alumbrado 
+      WHERE id::text = ${id}
     `;
-    return data.rows[0];
+    const row = data.rows[0];
+    if (!row) return null;
+    
+    return {
+      ...row,
+      checklist: typeof row.checklist === 'string' 
+        ? JSON.parse(row.checklist) 
+        : row.checklist
+    };
   } catch (error) {
     console.error('Error al obtener reporte:', error);
     throw new Error('Fallo al obtener los datos del reporte.');

@@ -31,6 +31,7 @@ export default async function Page({ searchParams }: PageProps) {
   return (
     <div className="p-4">
       <FormularioAlumbrado
+         key={editId ?? 'nuevo'}  
         reportesIniciales={reportesPrevios}
         reporteParaEditar={reporteParaEditar}
       />

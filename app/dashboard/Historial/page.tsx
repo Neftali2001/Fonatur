@@ -5,7 +5,7 @@ import Link from 'next/link';
 
 // 1. Definimos la interfaz para los datos de la base de datos
 interface ReporteAlumbrado {
-  id: number;
+  id: string;
   folio: string;
   fecha: string;
   tipo_mantenimiento: string | null;
