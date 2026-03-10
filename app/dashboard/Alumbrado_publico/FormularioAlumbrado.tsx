@@ -552,8 +552,9 @@ const guardarCuestionario = async () => {
       doc.setFont("helvetica", "bold");
       doc.setFontSize(12);
       doc.text(`MAPA DE UBICACIÓN (Reg. ${index + 1})`, margin, 20);
-      doc.addImage(form.mapImage, "PNG", margin, 30, pageWidth - margin * 2, 90);
-    }
+      doc.addImage(form.mapImage, "PNG", margin, 28, pageWidth - margin * 2, 130, '', 'FAST');
+     doc.addImage(form.mapImage, "PNG", margin, 30, pageWidth - margin * 2, 120);    }
+     
     // ================= EVIDENCIA FOTOGRÁFICA =================
     const imagenes = Object.entries(form.fotos).filter(([_, value]) => value !== null) as [string, string][];
     if (imagenes.length > 0) {
