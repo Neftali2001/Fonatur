@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   FaCar, FaClock, FaClipboardList, FaCamera, 
-  FaFilePdf, FaTrash, FaCheckCircle, FaExclamationTriangle, FaPlus
+  FaFilePdf, FaTrash, FaCheckCircle, FaExclamationTriangle, FaPlus, FaTachometerAlt
 } from 'react-icons/fa';
 import jsPDF from 'jspdf';
 
@@ -15,6 +15,7 @@ interface VehicleFormData {
   identificador: string;
   fechaHora: string;
   estado: string;
+  kilometraje: string;
 }
 
 type BasePhotoKeys = 'Frente' | 'Lado Izquierdo' | 'Lado Derecho' | 'Parte Trasera' | 'Interior';
@@ -50,7 +51,8 @@ const VehicleLogPage: React.FC = () => {
     modelo: '',
     identificador: '',
     fechaHora: '',
-    estado: ''
+    estado: '',
+    kilometraje: ''
   });
 
   // Estado de fotos
@@ -121,6 +123,7 @@ const VehicleLogPage: React.FC = () => {
     const nuevosErrores = [];
     if (!formData.modelo) nuevosErrores.push("El modelo del vehículo es obligatorio.");
     if (!formData.fechaHora) nuevosErrores.push(`La hora de ${tipoReporte.toLowerCase()} es obligatoria.`);
+    if (!formData.kilometraje) nuevosErrores.push("El kilometraje del vehículo es obligatorio."); // <-- Nueva validación
     if (!formData.estado) nuevosErrores.push("Las observaciones del estado son obligatorias.");
     
     if (nuevosErrores.length > 0) {
@@ -220,6 +223,8 @@ const VehicleLogPage: React.FC = () => {
     y += 8;
     doc.text(`Hora de ${tipoReporte}: ${formData.fechaHora.replace('T', ' ')}`, margin, y);
     y += 12;
+    doc.text(`Kilometraje: ${formData.kilometraje || 'N/A'}`, margin + 80, y);
+
 
     // CONDICIONES
     doc.setFont("helvetica", "bold");
@@ -368,6 +373,42 @@ const VehicleLogPage: React.FC = () => {
                   placeholder="Ej. Unidad 05 / JTD-4821"
                   className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none transition"
                 />
+              </div>
+              {/* Sección de Kilometraje Animado */}
+              <div className="flex flex-col mb-4 p-4 border rounded-lg bg-gray-50 transition-all duration-300 hover:shadow-md focus-within:ring-2 focus-within:ring-blue-400 focus-within:border-blue-400">
+                <label className="flex items-center text-gray-700 font-bold mb-2">
+                  <FaTachometerAlt className="mr-2 text-blue-500 animate-pulse" />
+                  Kilometraje (km)
+                </label>
+
+                <div className="flex items-center space-x-4">
+                  {/* Input numérico */}
+                  <input
+                    type="number"
+                    name="kilometraje"
+                    value={formData.kilometraje}
+                    onChange={handleInputChange}
+                    placeholder="Ej. 45000"
+                    className="w-1/3 p-2 border rounded text-lg font-semibold text-center text-gray-800 transition-transform duration-200 focus:scale-105 outline-none"
+                    min="0"
+                    max="500000"
+                  />
+
+                  {/* Slider interactivo (Animación visual) */}
+                  <input
+                    type="range"
+                    name="kilometraje"
+                    value={formData.kilometraje || 0}
+                    onChange={handleInputChange}
+                    min="0"
+                    max="200000"
+                    step="100"
+                    className="w-2/3 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-500 transition-all duration-300"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-2 text-right">
+                  Desliza o escribe el valor exacto.
+                </p>
               </div>
             </div>
           </section>
