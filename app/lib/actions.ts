@@ -2,9 +2,11 @@
 
 import { sql } from '@vercel/postgres';
 import { revalidatePath } from 'next/cache';
+import { put, del } from '@vercel/blob';
+
 
 // ✅ Ya no necesita "categoria" como parámetro separado — viene dentro de formData
-export async function crearReporte(formData: any, checklist: any, gps: any) {
+export async function crearReporte(formData: any, checklist: any, gps: any, fotos?: Record<string, string | null>) {
   
   const ahora = new Date();
   
@@ -48,7 +50,8 @@ export async function crearReporte(formData: any, checklist: any, gps: any) {
         longitud, 
         checklist, 
         fecha,
-        categoria
+        categoria,
+        fotos
       )
       VALUES (
         ${folio}, 
@@ -60,7 +63,8 @@ export async function crearReporte(formData: any, checklist: any, gps: any) {
         ${longitud}, 
         ${JSON.stringify(checklist)},
         NOW(),
-        ${categoria}
+        ${categoria},
+        ${JSON.stringify(fotos ?? {})}
       )
     `;
   } catch (error) {
@@ -71,7 +75,7 @@ export async function crearReporte(formData: any, checklist: any, gps: any) {
   revalidatePath('/dashboard/Historial');
 }
 
-export async function actualizarReporte(id: string, formData: any, checklist: any, gps: any) {
+export async function actualizarReporte(id: string, formData: any, checklist: any, gps: any, fotos?: Record<string, string | null>) {
   const sectorFinal = formData.sector === 'Otro'
     ? formData.sectorPersonalizado
     : formData.sector;
@@ -96,7 +100,9 @@ export async function actualizarReporte(id: string, formData: any, checklist: an
         latitud            = ${latitud},
         longitud           = ${longitud},
         checklist          = ${JSON.stringify(checklist)},
-        categoria          = ${categoria}
+        categoria          = ${categoria},
+        fotos              = ${JSON.stringify(fotos ?? {})}
+
       WHERE id = ${id}
     `;
   } catch (error) {
@@ -121,7 +127,11 @@ export async function obtenerReportePorId(id: string) {
       ...row,
       checklist: typeof row.checklist === 'string' 
         ? JSON.parse(row.checklist) 
-        : row.checklist
+        : row.checklist,
+        fotos: typeof row.fotos === 'string'      // ← NUEVO
+    ? JSON.parse(row.fotos)
+    : (row.fotos ?? {}),
+ 
     };
   } catch (error) {
     console.error('Error al obtener reporte:', error);
@@ -137,6 +147,19 @@ export async function eliminarReporte(id: string) {
     console.error('Error al eliminar:', error);
     throw new Error('Fallo al eliminar el reporte.');
   }
+}
+
+export async function subirFoto(formData: FormData) {
+  const file = formData.get('file') as File;
+  const blob = await put(file.name, file, {
+    access: 'public',
+    addRandomSuffix: true, // evita colisiones de nombres
+  });
+  return blob.url; // ← solo guardas esta URL
+}
+
+export async function eliminarFoto(url: string) {
+  await del(url);
 }
 
 // 'use server';

@@ -239,7 +239,11 @@ useEffect(() => {
   const [sistemaCoords, setSistemaCoords] = useState<string>('UTM WGS84');
   const [puntos, setPuntos] = useState<Punto[]>([{ id: 1, punto: 'P001', norte: '2286612.458', este: '612902.776', elev: '1586.921', desc: '' }]);
   const [equipo, setEquipo] = useState<string[]>(['Estación']);
-  const [fotos, setFotos] = useState<Fotos>({ Foto1: null, Foto2: null, Foto3: null, Foto4: null , Foto5: null, Foto6: null  });
+  const [fotos, setFotos] = useState<Fotos>(
+    reporteParaEditar?.fotos && Object.keys(reporteParaEditar.fotos).length > 0
+      ? reporteParaEditar.fotos
+      : { Foto1: null, Foto2: null, Foto3: null, Foto4: null, Foto5: null, Foto6: null }
+  );
   const [tipoPlano, setTipoPlano] = useState<string>('Planimétrico');
   const [logo, setLogo] = useState<string | null>(null);
   const [printSigs, setPrintSigs] = useState<PrintSigs>({ topografo: null, cliente: null });
@@ -389,13 +393,41 @@ const procesarFormularioActual = async () => {
     const nuevoId = puntos.length + 1;
     setPuntos([...puntos, { id: nuevoId, punto: `P00${nuevoId}`, norte: '', este: '', elev: '', desc: '' }]);
   };
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, tipo: string) => {
-    if (e.target.files && e.target.files[0]) {
-      const url = URL.createObjectURL(e.target.files[0]);
-      if (tipo === 'logo') setLogo(url);
-      else setFotos({ ...fotos, [tipo]: url });
-    }
+
+ const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, tipo: string) => {
+  if (!e.target.files || !e.target.files[0]) return;
+  
+  const file = e.target.files[0];
+  const canvas = document.createElement('canvas');
+  const img = new Image();
+  img.onload = () => {
+    const maxW = 800;
+    const ratio = Math.min(maxW / img.width, 1);
+    canvas.width = img.width * ratio;
+    canvas.height = img.height * ratio;
+    canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+    setFotos(prev => ({ ...prev, [tipo]: canvas.toDataURL('image/jpeg', 0.7) }));
   };
+  img.src = URL.createObjectURL(file);
+};
+//  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, tipo: string) => {
+//   if (!e.target.files || !e.target.files[0]) return;
+  
+//   const file = e.target.files[0];
+
+//   // Si ya había foto, eliminarla del blob primero
+//   if (fotos[tipo]) {
+//     await eliminarFoto(fotos[tipo]!);
+//   }
+
+//   // Subir al blob y obtener URL
+//   const fd = new FormData();
+//   fd.append('file', file);
+//   const url = await subirFoto(fd);
+
+//   setFotos(prev => ({ ...prev, [tipo]: url }));
+// };
+
 const guardarCuestionario = async () => {
   try {
     const sectorFinal = formData.sector === "Otro" ? sectorPersonalizado : formData.sector;
@@ -408,11 +440,11 @@ const guardarCuestionario = async () => {
     };
     if (reporteParaEditar?.id) {
       // ← MODO EDICIÓN: actualiza el registro existente
-      await actualizarReporte(reporteParaEditar.id.toString(), formDataFinal, checklist, gps);
+      await actualizarReporte(reporteParaEditar.id.toString(), formDataFinal, checklist, gps, fotos);
       alert("¡Reporte actualizado exitosamente!");
     } else {
       // ← MODO CREACIÓN: inserta un nuevo registro
-      await crearReporte(formDataFinal, checklist, gps);
+      await crearReporte(formDataFinal, checklist, gps, fotos);
       alert("¡Reporte guardado exitosamente en la base de datos!");
     }
   } catch (error) {
