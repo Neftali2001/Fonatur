@@ -249,8 +249,8 @@ useEffect(() => {
   const [printSigs, setPrintSigs] = useState<PrintSigs>({ topografo: null, cliente: null });
 
   const tramosPorSector: Record<string, string[]> = {
-    "Barra de Coyuca": ["Sendero seguro", "Barra coyuca"],
-    "Pie Cuesta": ["Sendero seguro", "Pie cuesta"],
+    "Barra de Coyuca": ["Sendero Seguro-Barra Coyuca"],
+    "Pie Cuesta": ["Sendero seguro-Pie cuesta"],
     "Barrios Historicos": ["Caleta-caletilla", "Sendero", "Costera-antigua", "Corredor Zocalo-quebrada", "Corredor zocalo-fuerte"],
     "Acapulco Tradicional": ["Sendero Tadeo arredondo", "Sendero cinerio-hornitos", "Michoacan", "Av. Universidad", "Dr. Ignacio chavez"],
     "Acapulco Dorado": ["Costa azul"],
@@ -293,9 +293,6 @@ const [checklist, setChecklist] = useState<ChecklistItem[]>(
 );
 
 {/*____________________________________________________________________________________________________________________________________________________________________________ */}
-
-
-
 
 
 
@@ -410,23 +407,6 @@ const procesarFormularioActual = async () => {
   };
   img.src = URL.createObjectURL(file);
 };
-//  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, tipo: string) => {
-//   if (!e.target.files || !e.target.files[0]) return;
-  
-//   const file = e.target.files[0];
-
-//   // Si ya había foto, eliminarla del blob primero
-//   if (fotos[tipo]) {
-//     await eliminarFoto(fotos[tipo]!);
-//   }
-
-//   // Subir al blob y obtener URL
-//   const fd = new FormData();
-//   fd.append('file', file);
-//   const url = await subirFoto(fd);
-
-//   setFotos(prev => ({ ...prev, [tipo]: url }));
-// };
 
 const guardarCuestionario = async () => {
   try {

@@ -237,8 +237,8 @@ const [fotos, setFotos] = useState<Fotos>(
   const [printSigs, setPrintSigs] = useState<PrintSigs>({ topografo: null, cliente: null });
 
    const tramosPorSector: Record<string, string[]> = {
-    "Barra de Coyuca": ["Sendero seguro", "Barra coyuca"],
-    "Pie Cuesta": ["Sendero seguro", "Pie cuesta"],
+    "Barra de Coyuca": ["Sendero Seguro-Barra Coyuca"],
+    "Pie Cuesta": ["Sendero Seguro-Pie Cuesta"],
     "Barrios Historicos": ["Caleta-caletilla", "Sendero", "Costera-antigua", "Corredor Zocalo-quebrada", "Corredor zocalo-fuerte"],
     "Acapulco Tradicional": ["Sendero Tadeo arredondo", "Sendero cinerio-hornitos", "Michoacan", "Av. Universidad", "Dr. Ignacio chavez"],
     "Acapulco Dorado": ["Costa azul"],
@@ -273,8 +273,6 @@ const [fotos, setFotos] = useState<Fotos>(
 );
 
 
-
-
   // Estado para saber en qué pregunta estamos (índice 0 a 13)
   const [preguntaActual, setPreguntaActual] = useState(0);
 
@@ -287,10 +285,6 @@ const [fotos, setFotos] = useState<Fotos>(
       setTimeout(() => setPreguntaActual(preguntaActual + 1), 350);
     }
   };
-
-
-
-
 
   const [formulariosAcumulados, setFormulariosAcumulados] = useState<any[]>([]);
   const limpiarFormulario = () => {
