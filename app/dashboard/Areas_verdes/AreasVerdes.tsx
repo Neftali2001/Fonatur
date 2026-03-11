@@ -392,7 +392,7 @@ const AreasVerdes: React.FC<FormularioProps> = ({ reportesIniciales, reportePara
       };
       const nuevosFormularios = [...formulariosAcumulados, formularioCompleto];
       setFormulariosAcumulados(nuevosFormularios);
-      const agregarOtro = window.confirm("Formulario guardado en la BD exitosamente.\n\n¿Deseas llenar OTRO formulario para incluirlo en el MISMO PDF?");
+      const agregarOtro = window.confirm("Formulario guardado exitosamente.\n\n¿Deseas llenar OTRO formulario para incluirlo en el MISMO PDF?");
       if (agregarOtro) {
         limpiarFormulario();
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -525,7 +525,6 @@ const AreasVerdes: React.FC<FormularioProps> = ({ reportesIniciales, reportePara
       y = (doc as any).lastAutoTable.finalY + 8;
       doc.setFontSize(9);
       doc.setFont("helvetica", "normal");
-      doc.text(`Ubicación general: ${ubicacionTexto}`, margin, y);
 
       // ── TABLA GEO-REFERENCIAS (página propia si existen) ──
       /*
@@ -539,48 +538,48 @@ const AreasVerdes: React.FC<FormularioProps> = ({ reportesIniciales, reportePara
                         ───
                         180  ✓
       */
-      const itemsConGeoRef = form.checklist.filter((item: ChecklistItem) => item.geoRef);
-      if (itemsConGeoRef.length > 0) {
-        doc.addPage();
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(12);
-        doc.text(`2. GEO-REFERENCIAS DE INCIDENCIAS (Reg. ${index + 1})`, margin, 20);
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(9);
-        doc.text("Coordenadas específicas capturadas durante la inspección:", margin, 28);
+      // const itemsConGeoRef = form.checklist.filter((item: ChecklistItem) => item.geoRef);
+      // if (itemsConGeoRef.length > 0) {
+      //   doc.addPage();
+      //   doc.setFont("helvetica", "bold");
+      //   doc.setFontSize(12);
+      //   doc.text(`2. GEO-REFERENCIAS DE INCIDENCIAS (Reg. ${index + 1})`, margin, 20);
+      //   doc.setFont("helvetica", "normal");
+      //   doc.setFontSize(9);
+      //   doc.text("Coordenadas específicas capturadas durante la inspección:", margin, 28);
 
-        autoTable(doc, {
-          startY: 33,
-          margin: { left: margin, right: margin }, // ✅
-          head: [["No.", "Concepto", "Latitud", "Longitud", "Precisión", "Hora"]],
-          body: itemsConGeoRef.map((item: ChecklistItem) => [
-            item.id,
-            item.pregunta,
-            item.geoRef!.lat,
-            item.geoRef!.lon,
-            item.geoRef!.precision,
-            item.geoRef!.timestamp,
-          ]),
-          theme: "striped",
-          styles: { fontSize: 8, cellPadding: 3, overflow: "linebreak" },
-          headStyles: { fillColor: [20, 83, 45], textColor: 255, fontStyle: "bold", halign: "center" },
-          columnStyles: {
-            0: { cellWidth: 10, halign: "center" },
-            1: { cellWidth: 80 },
-            2: { cellWidth: 22, halign: "center" },
-            3: { cellWidth: 22, halign: "center" },
-            4: { cellWidth: 22, halign: "center" },
-            5: { cellWidth: 24, halign: "center" }, // 10+80+22+22+22+24 = 180 ✓
-          },
-        });
-      }
+      //   autoTable(doc, {
+      //     startY: 33,
+      //     margin: { left: margin, right: margin }, // ✅
+      //     head: [["No.", "Concepto", "Latitud", "Longitud", "Precisión", "Hora"]],
+      //     body: itemsConGeoRef.map((item: ChecklistItem) => [
+      //       item.id,
+      //       item.pregunta,
+      //       item.geoRef!.lat,
+      //       item.geoRef!.lon,
+      //       item.geoRef!.precision,
+      //       item.geoRef!.timestamp,
+      //     ]),
+      //     theme: "striped",
+      //     styles: { fontSize: 8, cellPadding: 3, overflow: "linebreak" },
+      //     headStyles: { fillColor: [20, 83, 45], textColor: 255, fontStyle: "bold", halign: "center" },
+      //     columnStyles: {
+      //       0: { cellWidth: 10, halign: "center" },
+      //       1: { cellWidth: 80 },
+      //       2: { cellWidth: 22, halign: "center" },
+      //       3: { cellWidth: 22, halign: "center" },
+      //       4: { cellWidth: 22, halign: "center" },
+      //       5: { cellWidth: 24, halign: "center" }, // 10+80+22+22+22+24 = 180 ✓
+      //     },
+      //   });
+      // }
 
       // ── MAPA ──
       if (form.mapImage) {
         doc.addPage();
         doc.setFont("helvetica", "bold");
         doc.setFontSize(12);
-        doc.text(`3. MAPA DE UBICACIÓN (Reg. ${index + 1})`, margin, 20);
+        doc.text(`2. MAPA DE UBICACIÓN (Reg. ${index + 1})`, margin, 20);
         doc.setFontSize(9);
         doc.setFont("helvetica", "normal");
         doc.text(`Ubicación: ${ubicacionTexto}`, margin, 27); // y fijo tras addPage
@@ -595,7 +594,7 @@ const AreasVerdes: React.FC<FormularioProps> = ({ reportesIniciales, reportePara
         let yImg = 20;
         doc.setFont("helvetica", "bold");
         doc.setFontSize(12);
-        doc.text(`4. EVIDENCIA FOTOGRÁFICA (Reg. ${index + 1})`, margin, yImg);
+        doc.text(`3. EVIDENCIA FOTOGRÁFICA (Reg. ${index + 1})`, margin, yImg);
         yImg += 12;
 
         const imgWidth = 80, imgHeight = 60, espacioX = 15, espacioY = 22;
@@ -861,8 +860,10 @@ const AreasVerdes: React.FC<FormularioProps> = ({ reportesIniciales, reportePara
                 />
 
                 {/* ✅ Botón/badge de geo-referencia */}
+                {/* ── Geo-referencia por ítem ── */}
                 <div className="flex flex-col gap-2">
                   {checklist[preguntaActual].geoRef ? (
+                    // ── Estado: ya tiene coordenadas ──
                     <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2.5">
                       <div className="flex items-center gap-2 text-emerald-700 text-xs font-semibold">
                         <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
@@ -883,31 +884,100 @@ const AreasVerdes: React.FC<FormularioProps> = ({ reportesIniciales, reportePara
                         <FaTrash size={12} />
                       </button>
                     </div>
+
+                  ) : capturandoGeoRefId === checklist[preguntaActual].id ? (
+                    // ── Estado: capturando GPS ── ANIMACIÓN RADAR ──
+                    <div className="relative w-full overflow-hidden rounded-xl bg-slate-900 border border-emerald-800 py-3 px-4 flex items-center gap-3">
+
+                      {/* Keyframes inline */}
+                      <style>{`
+        @keyframes georef-scan {
+          0%   { transform: translateY(-150%); }
+          100% { transform: translateY(350%); }
+        }
+        @keyframes georef-spin {
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(360deg); }
+        }
+        @keyframes georef-ping-slow {
+          0%, 100% { opacity: 0.6; transform: scale(1);   }
+          50%       { opacity: 0;   transform: scale(1.8); }
+        }
+      `}</style>
+
+                      {/* Láser de barrido horizontal */}
+                      <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-xl">
+                        <div
+                          className="w-full h-8 bg-gradient-to-b from-transparent via-emerald-400/20 to-emerald-500/40 border-b border-emerald-400/60 shadow-[0_4px_12px_rgba(52,211,152,0.35)]"
+                          style={{ animation: 'georef-scan 1.4s linear infinite' }}
+                        />
+                      </div>
+
+                      {/* Icono radar giratorio */}
+                      <div className="relative flex-shrink-0 w-8 h-8 flex items-center justify-center">
+                        {/* Anillo exterior pulsante */}
+                        <div
+                          className="absolute inset-0 rounded-full border border-emerald-500/40"
+                          style={{ animation: 'georef-ping-slow 1.8s ease-in-out infinite' }}
+                        />
+                        {/* Arco giratorio */}
+                        <div
+                          className="absolute inset-0.5 rounded-full border-2 border-transparent border-t-emerald-400"
+                          style={{ animation: 'georef-spin 0.75s linear infinite' }}
+                        />
+                        {/* Pin estático en el centro */}
+                        <svg className="w-3.5 h-3.5 text-emerald-300 relative z-10" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z" />
+                        </svg>
+                      </div>
+
+                      {/* Texto + coordenadas simuladas parpadeando */}
+                      <div className="relative z-10 flex flex-col min-w-0">
+                        <span className="text-emerald-300 text-xs font-bold tracking-wide animate-pulse">
+                          Triangulando señal GPS...
+                        </span>
+                        <span className="text-emerald-600 text-[10px] font-mono truncate">
+                          {/* Muestra las coords generales del formulario si ya las capturó, si no puntos */}
+                          {gps.lat ? `${gps.lat}, ${gps.lon}` : '??.??????, -??.??????'}
+                        </span>
+                      </div>
+
+                      {/* Indicador de señal (3 barras animadas) */}
+                      <div className="ml-auto flex-shrink-0 flex items-end gap-[3px] h-5 relative z-10">
+                        {[0.4, 0.65, 1].map((delay, i) => (
+                          <div
+                            key={i}
+                            className="w-1 bg-emerald-400 rounded-sm"
+                            style={{
+                              height: `${40 + i * 25}%`,
+                              animation: `georef-ping-slow ${0.8 + i * 0.15}s ease-in-out infinite`,
+                              animationDelay: `${delay * 0.3}s`,
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+
                   ) : (
+                    // ── Estado: sin coordenadas, botón inactivo ──
                     <button
                       type="button"
                       onClick={() => capturarGeoRefItem(checklist[preguntaActual].id)}
-                      disabled={capturandoGeoRefId === checklist[preguntaActual].id}
-                      className={`w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border-2 text-sm font-semibold transition-all ${
-                        capturandoGeoRefId === checklist[preguntaActual].id
-                          ? "bg-slate-100 border-slate-300 text-slate-400 cursor-not-allowed"
-                          : "bg-white border-dashed border-slate-300 text-slate-500 hover:border-emerald-400 hover:text-emerald-600 hover:bg-emerald-50"
-                      }`}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl
+                 border-2 border-dashed border-slate-300 bg-white
+                 text-slate-500 text-sm font-semibold
+                 hover:border-emerald-400 hover:text-emerald-600 hover:bg-emerald-50
+                 transition-all"
                     >
-                      {capturandoGeoRefId === checklist[preguntaActual].id ? (
-                        <><FaSpinner className="animate-spin" size={14} /><span>Obteniendo ubicación...</span></>
-                      ) : (
-                        <>
-                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z" />
-                          </svg>
-                          <span>Geo-referenciar esta incidencia</span>
-                        </>
-                      )}
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z" />
+                      </svg>
+                      <span>Geo-referenciar esta incidencia</span>
                     </button>
                   )}
                 </div>
 
+                {/* ── Ayuda contextual ── */}
                 {checklist[preguntaActual].respuesta === "NO" && !checklist[preguntaActual].geoRef && (
                   <p className="text-[11px] text-amber-600 font-medium flex items-center gap-1">
                     ⚠️ Incidencia detectada. Considera geo-referenciar la ubicación exacta del problema.
