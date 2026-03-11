@@ -3,9 +3,14 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  Home, Lightbulb, Sparkles, TrashIcon,
-  Clock, Brush, Car,
+  Home,
+  Clock, Car,
 } from 'lucide-react';
+import { BsTrash3Fill } from "react-icons/bs";
+
+
+import { GiFruitTree, GiBroom, GiStreetLight   } from "react-icons/gi";
+
 
 type LinkItem = {
   name: string;
@@ -15,10 +20,10 @@ type LinkItem = {
 
 const links: LinkItem[] = [
   { name: 'Home',               href: '/dashboard',                    icon: Home      },
-  { name: 'Alumbrado público',  href: '/dashboard/Alumbrado_publico',  icon: Lightbulb },
-  { name: 'Áreas verdes',       href: '/dashboard/Areas_verdes',       icon: Sparkles  },
-  { name: 'Barrido vialidades', href: '/dashboard/Barrido_vialidades', icon: Brush     },
-  { name: 'Limpieza Urbana',    href: '/dashboard/Limpieza_Urbana',    icon: TrashIcon },
+  { name: 'Alumbrado público',  href: '/dashboard/Alumbrado_publico',  icon: GiStreetLight },
+  { name: 'Áreas verdes',       href: '/dashboard/Areas_verdes',       icon: GiFruitTree  },
+  { name: 'Barrido vialidades', href: '/dashboard/Barrido_vialidades', icon: GiBroom     },
+  { name: 'Limpieza Urbana',    href: '/dashboard/Limpieza_Urbana',    icon: BsTrash3Fill },
   { name: 'Vehículo',           href: '/dashboard/vehiculo',           icon: Car       },
   { name: 'Historial',          href: '/dashboard/Historial',          icon: Clock     },
 ];
