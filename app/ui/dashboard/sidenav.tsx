@@ -42,10 +42,10 @@ export default function SideNav() {
         {/* 3. Acción Destructiva / Salida */}
         {/* shrink-0 evita que el botón se aplaste en móviles si hay muchos enlaces */}
         <form className="mt-auto shrink-0 md:mt-0">
-          <button className="group flex h-[48px] w-full items-center justify-center gap-3 rounded-xl p-3 text-sm font-medium text-gray-500 transition-all duration-200 hover:bg-rose-50 hover:text-[#9F2241] active:scale-[0.98] md:justify-start md:px-4">
+          {/* <button className="group flex h-[48px] w-full items-center justify-center gap-3 rounded-xl p-3 text-sm font-medium text-gray-500 transition-all duration-200 hover:bg-rose-50 hover:text-[#9F2241] active:scale-[0.98] md:justify-start md:px-4">
             <PowerIcon className="w-5 stroke-2 transition-transform duration-200 group-hover:rotate-90 group-hover:scale-110" />
             <span className="hidden transition-colors md:block">Cerrar sesión</span>
-          </button>
+          </button> */}
         </form>
       </div>
     </div>

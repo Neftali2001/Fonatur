@@ -881,6 +881,30 @@ if (imagenes.length > 0) {
                 style={{ width: `${((preguntaActual + 1) / checklist.length) * 100}%` }}
               />
             </div>
+             {/* Mini-mapa de preguntas — va debajo de la barra de progreso */}
+            <div className="flex flex-wrap gap-1.5 mb-6">
+              {checklist.map((item, idx) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setPreguntaActual(idx)}
+                  title={item.pregunta}
+                  className={`w-6 h-6 rounded-full text-[10px] font-bold transition-all border
+        ${idx === preguntaActual
+                      ? "ring-2 ring-offset-1 ring-slate-400 scale-110"
+                      : ""}
+        ${item.respuesta === "SI"
+                      ? "bg-emerald-500 border-emerald-500 text-white"
+                      : item.respuesta === "NO"
+                        ? "bg-red-500 border-red-500 text-white"
+                        : "bg-white border-gray-300 text-gray-400"}
+        ${item.geoRef ? "ring-1 ring-yellow-400" : ""}
+      `}
+                >
+                  {item.id}
+                </button>
+              ))}
+            </div>
 
             <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-8 min-h-[300px] flex flex-col justify-center transition-all">
               <h3 className="text-lg sm:text-xl font-bold text-center text-slate-800 mb-8 min-h-[60px] flex items-center justify-center">
