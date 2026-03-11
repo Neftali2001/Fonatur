@@ -733,59 +733,110 @@ const generarPDFMultiples = async (listaFormularios: any[]) => {
       );
     }
 
-    // ── EVIDENCIA FOTOGRÁFICA ────────────────────────────────────
-    const imagenes = Object.entries(form.fotos).filter(
-      ([_, value]) => value !== null
-    ) as [string, string][];
+    // ── EVIDENCIA FOTOGRÁFICA ──────────────────────────────────────
+const imagenes = Object.entries(form.fotos).filter(
+  ([_, value]) => value !== null
+) as [string, string][];
 
-    if (imagenes.length > 0) {
+if (imagenes.length > 0) {
+  doc.addPage();
+  let yImg = 20;
+
+  // Título de sección
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.text(`3. EVIDENCIA FOTOGRÁFICA (Reg. ${index + 1})`, margin, yImg);
+  yImg += 4;
+  doc.setLineWidth(0.3);
+  doc.setDrawColor(200, 200, 200);
+  doc.line(margin, yImg + 2, pageWidth - margin, yImg + 2);
+  yImg += 10;
+
+  /*
+    Layout: 2 columnas, sin marcos, con sombra simulada (rect gris claro detrás),
+    imagen a máxima resolución posible dentro de su celda.
+
+    Anchos:
+      col1 xPosition  = margin (15)
+      col2 xPosition  = margin + imgWidth + espacioX
+      imgWidth        = 82mm  → dos columnas = 82+10+82 = 174 ≤ 180 ✓
+  */
+  const imgWidth  = 82;
+  const imgHeight = 62;
+  const espacioX  = 10;   // separación horizontal entre columnas
+  const espacioY  = 16;   // separación vertical entre filas
+  const captionH  = 8;    // altura reservada para el pie de foto
+
+  let xPosition = margin;
+  let contador  = 1;
+
+  // Resetear color de trazo
+  doc.setDrawColor(0, 0, 0);
+
+  for (let i = 0; i < imagenes.length; i++) {
+    const [_, base64] = imagenes[i];
+
+    // ¿Cabe en la página actual?
+    if (yImg + imgHeight + captionH > pageHeight - 20) {
       doc.addPage();
-      let yImg = 20;
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(12);
-      doc.text(`3. EVIDENCIA FOTOGRÁFICA (Reg. ${index + 1})`, margin, yImg);
-      yImg += 12;
-
-      const imgWidth = 80;
-      const imgHeight = 60;
-      const espacioX = 15;
-      const espacioY = 22;
-      let xPosition = margin;
-      let contador = 1;
-
-      for (let i = 0; i < imagenes.length; i++) {
-        const [tipo, base64] = imagenes[i];
-
-        if (yImg + imgHeight > pageHeight - 30) {
-          doc.addPage();
-          yImg = 20;
-          xPosition = margin;
-        }
-
-        const imgProps = doc.getImageProperties(base64);
-        const ratio = Math.min(imgWidth / imgProps.width, imgHeight / imgProps.height);
-        const newWidth = imgProps.width * ratio;
-        const newHeight = imgProps.height * ratio;
-
-        doc.rect(xPosition, yImg, imgWidth, imgHeight); // marco sin desplazamiento extra
-        doc.addImage(base64, "JPEG", xPosition, yImg, newWidth, newHeight);
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(8);
-        doc.text(
-          `Figura ${contador}. ${tipo.toUpperCase()}`,
-          xPosition, yImg + imgHeight + 5
-        );
-
-        contador++;
-        // Avanzar columna o saltar a nueva fila
-        if (xPosition + imgWidth * 2 + espacioX <= pageWidth - margin) {
-          xPosition += imgWidth + espacioX;
-        } else {
-          xPosition = margin;
-          yImg += imgHeight + espacioY;
-        }
-      }
+      yImg      = 20;
+      xPosition = margin;
     }
+
+    // ── Sombra simulada: rect gris muy claro, desplazado 1.5mm ──
+    doc.setFillColor(220, 220, 220);
+    doc.roundedRect(xPosition + 1.5, yImg + 1.5, imgWidth, imgHeight, 2, 2, "F");
+
+    // ── Fondo blanco de la celda ──
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(xPosition, yImg, imgWidth, imgHeight, 2, 2, "F");
+
+    // ── Imagen: escalar manteniendo aspecto y centrar dentro de la celda ──
+    const imgProps = doc.getImageProperties(base64);
+    const scaleX   = imgWidth  / imgProps.width;
+    const scaleY   = imgHeight / imgProps.height;
+    const ratio    = Math.min(scaleX, scaleY);  // contiene sin distorsionar
+
+    const drawW = imgProps.width  * ratio;
+    const drawH = imgProps.height * ratio;
+
+    // Centrado dentro de la celda
+    const offsetX = (imgWidth  - drawW) / 2;
+    const offsetY = (imgHeight - drawH) / 2;
+
+    // ✅ "PNG" en lugar de "JPEG" conserva la calidad original del base64
+    doc.addImage(
+      base64, "PNG",
+      xPosition + offsetX,
+      yImg      + offsetY,
+      drawW, drawH,
+      `img-${index}-${i}`,  // alias único, evita re-codificación si se repite
+      "FAST"
+    );
+
+    // ── Pie de foto: solo número, sin "FOTO1" repetitivo ──
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(7.5);
+    doc.setTextColor(100, 100, 100);
+    doc.text(
+      `Fotografía ${contador}`,
+      xPosition + imgWidth / 2,
+      yImg + imgHeight + 5.5,
+      { align: "center" }
+    );
+    doc.setTextColor(0, 0, 0); // resetear color
+
+    contador++;
+
+    // Avanzar columna o nueva fila
+    if (xPosition + imgWidth + espacioX + imgWidth <= pageWidth - margin) {
+      xPosition += imgWidth + espacioX;
+    } else {
+      xPosition = margin;
+      yImg += imgHeight + captionH + espacioY;
+    }
+  }
+}
   }
 
   // ── MARCA DE AGUA GLOBAL ─────────────────────────────────────

@@ -2,6 +2,7 @@ import { sql } from '@vercel/postgres';
 import { FaTrash, FaEdit, FaMapMarkerAlt, FaSearch } from 'react-icons/fa';
 import { eliminarReporte } from '@/app/lib/actions';
 import Link from 'next/link';
+import BotonActualizar from '@/app/dashboard/Historial/BotonActualizar';
 
 // 1. Definimos la interfaz para los datos de la base de datos
 interface ReporteAlumbrado {
@@ -133,6 +134,7 @@ const getRuta = (categoria: string) =>
         >
           Aplicar
         </button>
+        <BotonActualizar />
       </form>
 
       {/* --- LISTA DE RESULTADOS --- */}
