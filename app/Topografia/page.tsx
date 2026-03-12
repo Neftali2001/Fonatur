@@ -65,6 +65,9 @@ interface FormData {
   elevB:      string;
   area:       string;
   notas:      string;
+  modelo:     string;
+  NoSerie:    string;
+  
 }
 
 interface GpsState {
@@ -126,6 +129,8 @@ const TopographyForm: React.FC = () => {
     elevB:     '',
     area:      '2.35ha',
     notas:     'Trabajo realizado sin incidencias relevantes...',
+    modelo:    'MDOIK23',
+    NoSerie:   '18282728'
   });
 
   const [gps,          setGps]          = useState<GpsState>({ lat: '', lon: '', precision: '--' });
@@ -175,13 +180,63 @@ const TopographyForm: React.FC = () => {
       maximumAge: 0,
     };
 
-    const onSuccess: PositionCallback = ({ coords }) => {
+    const onSuccess: PositionCallback = async ({ coords }) => {
+      const latStr = coords.latitude.toFixed(6);
+      const lonStr = coords.longitude.toFixed(6);
+
       setGps({
-        lat:       coords.latitude.toFixed(6),
-        lon:       coords.longitude.toFixed(6),
+        lat:       latStr,
+        lon:       lonStr,
         precision: `${coords.accuracy.toFixed(1)}m`,
       });
+      
       if (coords.accuracy < 10) finalizarCaptura();
+
+      try {
+        // 1. Obtener Calle y Municipio (Reverse Geocoding con OpenStreetMap)
+        const geoRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latStr}&lon=${lonStr}`);
+        const geoData = await geoRes.json();
+        
+        if (geoData && geoData.address) {
+          const address = geoData.address;
+          const calle = address.road || address.pedestrian || address.suburb || 'Ubicación no especificada';
+          
+          // Buscar el municipio/ciudad y el estado
+          const ciudad = address.city || address.town || address.village || address.county || '';
+          const estado = address.state || '';
+          const municipioCalculado = ciudad ? `${ciudad}, ${estado}` : estado;
+
+          setFormData(prev => ({
+            ...prev,
+            ubicacion: calle,
+            municipio: municipioCalculado || prev.municipio
+          }));
+        }
+
+        // 2. Obtener el Clima (Open-Meteo)
+        const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latStr}&longitude=${lonStr}&current_weather=true`);
+        const weatherData = await weatherRes.json();
+        
+        if (weatherData && weatherData.current_weather) {
+          const code = weatherData.current_weather.weathercode;
+          let climaCalculado: ClimaType = 'Soleado';
+          
+          // Códigos WMO: 0 = Despejado, 1-3 = Nublado, >50 = Lluvia/Chubascos
+          if (code >= 1 && code <= 3) {
+            climaCalculado = 'Nublado';
+          } else if (code >= 50) {
+            climaCalculado = 'Lluvia';
+          }
+          
+          setClima(climaCalculado);
+        }
+
+      } catch (error) {
+        console.error('Error al obtener datos adicionales (Geocoding/Clima):', error);
+      } finally {
+        // Por si la precisión no fue menor a 10 y el watch sigue, detenemos el loading
+        setCargandoGps(false); 
+      }
     };
 
     const onError: PositionErrorCallback = () => {
@@ -192,7 +247,6 @@ const TopographyForm: React.FC = () => {
     watchId.current = navigator.geolocation.watchPosition(onSuccess, onError, options);
     window.setTimeout(finalizarCaptura, 10_000);
   }, [finalizarCaptura]);
-
   // ── Handlers de formulario ────────────────────────────────────────────────
   const handleInputChange = useCallback(
     (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -710,6 +764,35 @@ const TopographyForm: React.FC = () => {
           <section className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
             <h2 className="text-[#d35400] font-bold mb-4 flex items-center gap-2 uppercase text-sm">
               <FaCube size={18} /> Datos de Estación (Base)
+            </h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+              {(
+                [['baseId', 'Punto ID'], ['altInst', 'Altura Inst.'], ['visado', 'Visado (BS)'], ['altPrisma', 'Alt. Prisma']] as [keyof FormData, string][]
+              ).map(([n, l]) => (
+                <div key={n}>
+                  <label className="text-[10px] font-bold text-gray-400 uppercase">{l}</label>
+                  <input className="w-full p-2.5 bg-[#f8fafc] border border-gray-200 rounded-lg outline-none"
+                    name={n} value={formData[n]} onChange={handleInputChange} />
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {(
+                [['norteB', 'Norte (Y)'], ['esteB', 'Este (X)'], ['elevB', 'Elevación (Z)']] as [keyof FormData, string][]
+              ).map(([n, l]) => (
+                <div key={n}>
+                  <label className="text-[10px] font-bold text-gray-400 uppercase">{l}</label>
+                  <input className="w-full p-2.5 bg-[#f8fafc] border border-gray-200 rounded-lg outline-none"
+                    name={n} value={formData[n]} onChange={handleInputChange} />
+                </div>
+              ))}
+            </div>
+          </section>
+
+                    {/* ── Datos de Estación (Equipo) ─────────────────────────────────────── */}
+          <section className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
+            <h2 className="text-[#d35400] font-bold mb-4 flex items-center gap-2 uppercase text-sm">
+              <FaCube size={18} /> Datos del equipo
             </h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
               {(

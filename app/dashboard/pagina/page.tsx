@@ -51,7 +51,7 @@ export default function LovePageMobile() {
               </motion.div>
               <h2 className="text-rose-400 font-bold tracking-[0.3em] text-[10px] uppercase mb-2">Petición Especial</h2>
               <h1 className="text-4xl font-black text-slate-800 leading-tight">
-                ¿Quieres ser <br/> mi novia?
+                ¿Quieres salir <br/> a comer?
               </h1>
             </div>
 
@@ -115,7 +115,7 @@ export default function LovePageMobile() {
               transition={{ delay: 1 }}
               className="mt-12 text-white/50 text-[10px] uppercase tracking-widest"
             >
-              Felicidades al nuevo equipo
+              A comel
             </motion.div>
           </motion.div>
         )}
