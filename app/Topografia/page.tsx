@@ -89,7 +89,7 @@ const FOTO_KEYS: FotoKey[] = ['Foto1', 'Foto2', 'Foto3', 'Foto4', 'Foto5', 'Foto
 const EQUIPO_OPCIONES      = ['Estación', 'GPS RTK', 'Nivel', 'Dron', 'Prisma', 'Cinta'] as const;
 const CLIMA_OPCIONES       = ['Soleado', 'Nublado', 'Lluvia'] as const;
 const COORDS_OPCIONES      = ['UTM WGS84', 'ITRF08', 'Locales'] as const;
-const PLANO_OPCIONES       = ['Planimétrico', 'Altimétrico', 'Curvas de Nivel', 'Deslinde'] as const;
+const PLANO_OPCIONES       = ['Planimétrico', 'Altimétrico', 'Curvas de Nivel', 'Deslinde', 'Fotoprametrico', 'Lotificacion', 'Peritaje', 'Plan-altimetro', 'Batimetria',] as const;
 
 type ClimaType  = (typeof CLIMA_OPCIONES)[number];
 type PlanoType  = (typeof PLANO_OPCIONES)[number];
