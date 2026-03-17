@@ -329,7 +329,6 @@ const FormularioAlumbrado: React.FC<FormularioProps> = ({ reporteParaEditar }) =
       });
 
       y = (doc as any).lastAutoTable.finalY + 8;
-      doc.setFontSize(9).text(`Ubicación: ${ubStr}`, margin, y);
 
   
 
