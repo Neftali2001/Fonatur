@@ -4,31 +4,29 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Home,
-  Clock, Car,
+  Clock, 
+  Car,
 } from 'lucide-react';
 import { BsTrash3Fill } from "react-icons/bs";
 import { GrMap } from "react-icons/gr";
 import { BiChair } from "react-icons/bi";
-
-
-import { GiFruitTree, GiBroom, GiStreetLight   } from "react-icons/gi";
-
+import { GiFruitTree, GiBroom, GiStreetLight } from "react-icons/gi";
 
 type LinkItem = {
   name: string;
   href: string;
-  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+  icon: React.ElementType; // Mejor compatibilidad entre lucide y react-icons
 };
 
 const links: LinkItem[] = [
-  { name: 'Home',               href: '/dashboard',                    icon: GrMap      },
-  { name: 'Alumbrado público',  href: '/dashboard/Alumbrado_publico',  icon: GiStreetLight },
-  { name: 'Áreas verdes',       href: '/dashboard/Areas_verdes',       icon: GiFruitTree  },
-  { name: 'Barrido vialidades', href: '/dashboard/Barrido_vialidades', icon: GiBroom     },
-  { name: 'Limpieza Urbana',    href: '/dashboard/Limpieza_Urbana',    icon: BsTrash3Fill },
-  { name: 'MobiliarioUrbano',    href: '/dashboard/Mobiliario_Urbano',    icon: BiChair },
-  { name: 'Vehículo',           href: '/dashboard/vehiculo',           icon: Car       },
-  { name: 'Historial',          href: '/dashboard/Historial',          icon: Clock     },
+  { name: 'Home',               href: '/dashboard',                     icon: GrMap       },
+  { name: 'Alumbrado público',  href: '/dashboard/Alumbrado_publico',   icon: GiStreetLight },
+  { name: 'Áreas verdes',       href: '/dashboard/Areas_verdes',        icon: GiFruitTree  },
+  { name: 'Barrido vialidades', href: '/dashboard/Barrido_vialidades',  icon: GiBroom     },
+  { name: 'Limpieza Urbana',    href: '/dashboard/Limpieza_Urbana',     icon: BsTrash3Fill },
+  { name: 'Mobiliario Urbano',  href: '/dashboard/Mobiliario_Urbano',   icon: BiChair },
+  { name: 'Vehículo',           href: '/dashboard/vehiculo',            icon: Car       },
+  { name: 'Historial',          href: '/dashboard/Historial',           icon: Clock     },
 ];
 
 export default function NavLinks() {
@@ -49,9 +47,9 @@ export default function NavLinks() {
             key={link.name}
             href={link.href}
             className={`
-              relative flex h-[48px] shrink-0 grow items-center justify-center gap-2
-              rounded-xl p-3 text-sm font-medium transition-all duration-200
-              md:flex-none md:justify-start md:px-3
+              relative flex shrink-0 items-center justify-center gap-3
+              h-12 w-12 rounded-xl transition-all duration-200
+              md:h-auto md:w-full md:justify-start md:p-3 md:text-sm font-medium
               ${isActive
                 ? // ── ACTIVO ──
                   'bg-emerald-50 text-emerald-700 shadow-sm'
@@ -71,10 +69,12 @@ export default function NavLinks() {
             )}
 
             <LinkIcon
-              className={`w-5 h-5 shrink-0 transition-colors ${
+              // Aumentamos a w-6 h-6 para mejor definición y facilidad de toque
+              className={`w-6 h-6 shrink-0 transition-colors ${
                 isActive ? 'text-emerald-600' : 'text-gray-400'
               }`}
             />
+            
             <p className={`hidden md:block ${isActive ? 'font-semibold' : ''}`}>
               {link.name}
             </p>
@@ -84,6 +84,93 @@ export default function NavLinks() {
     </>
   );
 }
+
+// 'use client';
+
+// import Link from 'next/link';
+// import { usePathname } from 'next/navigation';
+// import {
+//   Home,
+//   Clock, Car,
+// } from 'lucide-react';
+// import { BsTrash3Fill } from "react-icons/bs";
+// import { GrMap } from "react-icons/gr";
+// import { BiChair } from "react-icons/bi";
+
+
+// import { GiFruitTree, GiBroom, GiStreetLight   } from "react-icons/gi";
+
+
+// type LinkItem = {
+//   name: string;
+//   href: string;
+//   icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+// };
+
+// const links: LinkItem[] = [
+//   { name: 'Home',               href: '/dashboard',                    icon: GrMap      },
+//   { name: 'Alumbrado público',  href: '/dashboard/Alumbrado_publico',  icon: GiStreetLight },
+//   { name: 'Áreas verdes',       href: '/dashboard/Areas_verdes',       icon: GiFruitTree  },
+//   { name: 'Barrido vialidades', href: '/dashboard/Barrido_vialidades', icon: GiBroom     },
+//   { name: 'Limpieza Urbana',    href: '/dashboard/Limpieza_Urbana',    icon: BsTrash3Fill },
+//   { name: 'MobiliarioUrbano',    href: '/dashboard/Mobiliario_Urbano',    icon: BiChair },
+//   { name: 'Vehículo',           href: '/dashboard/vehiculo',           icon: Car       },
+//   { name: 'Historial',          href: '/dashboard/Historial',          icon: Clock     },
+// ];
+
+// export default function NavLinks() {
+//   const pathname = usePathname();
+
+//   return (
+//     <>
+//       {links.map((link) => {
+//         const LinkIcon = link.icon;
+//         // Activo si la ruta coincide exactamente, o si es subruta (excepto /dashboard raíz)
+//         const isActive =
+//           link.href === '/dashboard'
+//             ? pathname === '/dashboard'
+//             : pathname.startsWith(link.href);
+
+//         return (
+//           <Link
+//             key={link.name}
+//             href={link.href}
+//             className={`
+//               relative flex h-[48px] shrink-0 grow items-center justify-center gap-2
+//               rounded-xl p-3 text-sm font-medium transition-all duration-200
+//               md:flex-none md:justify-start md:px-3
+//               ${isActive
+//                 ? // ── ACTIVO ──
+//                   'bg-emerald-50 text-emerald-700 shadow-sm'
+//                 : // ── INACTIVO ──
+//                   'bg-gray-50 text-gray-500 hover:bg-emerald-50/60 hover:text-emerald-600'
+//               }
+//             `}
+//           >
+//             {/* Barra lateral verde (solo desktop) */}
+//             {isActive && (
+//               <span className="absolute left-0 top-1/2 hidden h-5 w-1 -translate-y-1/2 rounded-r-full bg-emerald-500 md:block" />
+//             )}
+
+//             {/* Punto indicador (solo mobile, debajo del ícono) */}
+//             {isActive && (
+//               <span className="absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-emerald-500 md:hidden" />
+//             )}
+
+//             <LinkIcon
+//               className={`w-5 h-5 shrink-0 transition-colors ${
+//                 isActive ? 'text-emerald-600' : 'text-gray-400'
+//               }`}
+//             />
+//             <p className={`hidden md:block ${isActive ? 'font-semibold' : ''}`}>
+//               {link.name}
+//             </p>
+//           </Link>
+//         );
+//       })}
+//     </>
+//   );
+// }
 
 
 // import {
