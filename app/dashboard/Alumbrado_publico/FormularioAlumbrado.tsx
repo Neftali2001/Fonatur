@@ -39,12 +39,14 @@ const PREGUNTAS: string[] = [
   "ENTORNO Y SEGURIDAD SEGÚN ZONA (CAMELLÓN/BANQUETA)",
   "INTEGRIDAD DE LUMINARIA Y ÓPTICA",
   "ORIENTACIÓN ADECUADA SIN DESLUMBRAMIENTO",
+  "PRENDE O NO PRENDE LAMPARA TIPO BOLARDO (CERILLO)",
+  "MANTENIMIENTO A TRANSFORMADORES DE ALUMBRADO",
+  "ESTADO FISICO DE LAMPARAS TIPO BOLARDO (CERILLO)",
   "ESTADO DE POSTE METÁLICO/CONCRETO",
   "ESTADO DE BASE DE CONCRETO",
   "ESTADO DE LÁMPARAS E ILUMINACIÓN DE PARABUSES",
   "ESTADO DE LÁMPARAS WALLPACK",
   "ESTADO DE LÁMPARAS TIPO FRAGATA",
-  "MANTENIMIENTO A TRANSFORMADORES DE ALUMBRADO",
 ];
 
 const TRAMOS_POR_SECTOR: Record<string, string[]> = {
@@ -302,7 +304,7 @@ const FormularioAlumbrado: React.FC<FormularioProps> = ({ reporteParaEditar }) =
       // Construir tabla con fila separadora antes del ítem 9
       const tableData: any[] = [];
       form.checklist.forEach((item: ChecklistItem) => {
-        if (item.id === 9) {
+        if (item.id === 11) {
           tableData.push([
             { content: "ESTADO FÍSICO", colSpan: 2, styles: { halign: "center", fillColor: [30, 30, 30], textColor: [255, 255, 255], fontStyle: "bold" } },
             { content: "Bueno", styles: { halign: "center", fillColor: [30, 30, 30], textColor: [255, 255, 255], fontStyle: "bold" } },
@@ -500,7 +502,7 @@ const FormularioAlumbrado: React.FC<FormularioProps> = ({ reporteParaEditar }) =
 
             <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-8 min-h-[300px] flex flex-col justify-center">
               {/* Badge "Estado Físico" para ítems 9+ */}
-              {itemActual.id >= 9 && (
+              {itemActual.id >= 11 && (
                 <div className="text-center mb-4">
                   <span className="bg-slate-800 text-white text-[10px] uppercase px-3 py-1 rounded-full font-bold tracking-wide">
                     Estado Físico de Componentes

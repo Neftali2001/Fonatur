@@ -8,6 +8,8 @@ import {
 } from 'lucide-react';
 import { BsTrash3Fill } from "react-icons/bs";
 import { GrMap } from "react-icons/gr";
+import { BiChair } from "react-icons/bi";
+
 
 import { GiFruitTree, GiBroom, GiStreetLight   } from "react-icons/gi";
 
@@ -24,6 +26,7 @@ const links: LinkItem[] = [
   { name: 'Áreas verdes',       href: '/dashboard/Areas_verdes',       icon: GiFruitTree  },
   { name: 'Barrido vialidades', href: '/dashboard/Barrido_vialidades', icon: GiBroom     },
   { name: 'Limpieza Urbana',    href: '/dashboard/Limpieza_Urbana',    icon: BsTrash3Fill },
+  { name: 'MobiliarioUrbano',    href: '/dashboard/Mobiliario_Urbano',    icon: BiChair },
   { name: 'Vehículo',           href: '/dashboard/vehiculo',           icon: Car       },
   { name: 'Historial',          href: '/dashboard/Historial',          icon: Clock     },
 ];

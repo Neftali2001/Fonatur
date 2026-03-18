@@ -71,7 +71,13 @@ const PREGUNTAS: string[] = [
   "LIXIVIADOS O DERRAMES ALREDEDOR DE BOTES O CONTENEDORES",
   "RESIDUOS DISPERSOS DESPUÉS DE LA RECOLECCIÓN",
   "PODA EN GRAL CADA 6 MESES",
-  "SUSTITUCIÓN DE BOTES DE BASURA",
+  "¿El canal pluvial presenta obstrucciones (basura, sedimentos, vegetación, lodo, etc.)?",
+  "¿El canal pluvial presenta daños estructurales (fisuras, desprendimientos, deformaciones, socavaciones?",
+  "¿El agua puede fluir libremente a través del canal pluvial?",
+  "¿Los accesos al canal (tapas, rejillas, registros) están en buen estado?",
+  "¿El canal pluvial se encuentra en buenas condiciones (sin obstrucciones, sin daño estructural y con flujo libre)?",
+  "Indique el estado actual de la rejilla pluvial (puede seleccionar más de una opción):",
+
 ];
 
 const TRAMOS_POR_SECTOR: Record<string, string[]> = {
@@ -99,7 +105,8 @@ const parsearChecklist = (raw: any): ChecklistItem[] | null => {
     if (Array.isArray(parsed) && parsed.length > 0) {
       return parsed.map((item: any) => ({
         ...item,
-        respuesta:   (item.respuesta  ?? '').toUpperCase(),
+        // respuesta:   (item.respuesta  ?? '').toUpperCase(),
+        respuesta:   item.respuesta ?? '',
         observacion: item.observacion ?? '',
         geoRef:      item.geoRef      ?? null,
       }));
@@ -397,8 +404,37 @@ const LimpiezaUrbana: React.FC<FormularioProps> = ({ reporteParaEditar }) => {
           const geo = item.geoRef
             ? `Lat: ${item.geoRef.lat}\nLon: ${item.geoRef.lon}\n±${item.geoRef.precision} — ${item.geoRef.timestamp}`
             : "";
-          return [item.id, item.pregunta, item.respuesta === "SI" ? "X" : "", item.respuesta === "NO" ? "X" : "", [obs, geo].filter(Boolean).join("\n")];
+
+          const esPreguntaRejilla = item.pregunta === "Indique el estado actual de la rejilla pluvial (puede seleccionar más de una opción):";
+
+          if (esPreguntaRejilla) {
+            // Para la pregunta de la rejilla, ponemos las respuestas en la columna de observaciones
+            const respuestasMultiples = item.respuesta ? `Estado: ${item.respuesta}\n` : "Sin respuesta\n";
+            return [
+              item.id,
+              item.pregunta,
+              "--", // Cumple
+              "--", // No Cumple
+              [respuestasMultiples + obs, geo].filter(Boolean).join("\n")
+            ];
+          }
+
+          // Comportamiento normal para las preguntas SI / NO
+          return [
+            item.id,
+            item.pregunta,
+            item.respuesta === "SI" ? "X" : "",
+            item.respuesta === "NO" ? "X" : "",
+            [obs, geo].filter(Boolean).join("\n")
+          ];
         }),
+        // body: form.checklist.map((item: ChecklistItem) => {
+        //   const obs = item.observacion || "";
+        //   const geo = item.geoRef
+        //     ? `Lat: ${item.geoRef.lat}\nLon: ${item.geoRef.lon}\n±${item.geoRef.precision} — ${item.geoRef.timestamp}`
+        //     : "";
+        //   return [item.id, item.pregunta, item.respuesta === "SI" ? "X" : "", item.respuesta === "NO" ? "X" : "", [obs, geo].filter(Boolean).join("\n")];
+        // }),
         theme: "grid",
         styles: { fontSize: 8, cellPadding: 3, valign: "top", lineWidth: 0.2, overflow: "linebreak" },
         headStyles: { fillColor: [30, 30, 30], textColor: 255, fontStyle: "bold", halign: "center" },
@@ -656,7 +692,62 @@ const LimpiezaUrbana: React.FC<FormularioProps> = ({ reporteParaEditar }) => {
                 {itemActual.id}. {itemActual.pregunta}
               </h3>
 
-              <div className="flex flex-col sm:flex-row gap-4 justify-center mb-6">
+              {itemActual.pregunta === "Indique el estado actual de la rejilla pluvial (puede seleccionar más de una opción):" ? (
+  <div className="flex flex-col gap-3 justify-center mb-6 w-full max-w-md mx-auto">
+    {[
+      "Se encuentra rota",
+      "No se puede levantar",
+      "Está pegada o adherida al concreto",
+      "Se encuentra en buen estado"
+    ].map(opcion => {
+      // Convertimos el string guardado a un array para saber qué está marcado
+      const selecciones = itemActual.respuesta ? itemActual.respuesta.split(', ') : [];
+      const seleccionado = selecciones.includes(opcion);
+
+      return (
+        <label key={opcion} className={`cursor-pointer flex items-center gap-3 py-3 px-4 rounded-xl border-2 font-bold transition-all text-sm sm:text-base ${
+          seleccionado
+            ? "bg-emerald-500 border-emerald-500 text-white shadow-lg shadow-emerald-500/30"
+            : "bg-white border-gray-200 text-gray-600 hover:border-emerald-300 hover:bg-emerald-50"
+        }`}>
+          <input 
+            type="checkbox" 
+            className="w-5 h-5 accent-emerald-600 rounded"
+            checked={seleccionado}
+            onChange={(e) => {
+              let nuevasSelecciones = [...selecciones];
+              if (e.target.checked) {
+                nuevasSelecciones.push(opcion);
+              } else {
+                nuevasSelecciones = nuevasSelecciones.filter(o => o !== opcion);
+              }
+              // Guardamos como string separado por comas
+              handleChecklistChange(itemActual.id, 'respuesta', nuevasSelecciones.join(', '));
+            }} 
+          />
+          {opcion}
+        </label>
+      );
+    })}
+  </div>
+) : (
+                <div className="flex flex-col sm:flex-row gap-4 justify-center mb-6">
+                  {["SI", "NO"].map(val => (
+                    <label key={val} className={`cursor-pointer flex-1 py-4 px-6 rounded-xl border-2 text-center font-bold transition-all ${itemActual.respuesta === val
+                        ? val === "SI" ? "bg-emerald-500 border-emerald-500 text-white shadow-lg shadow-emerald-500/30"
+                          : "bg-red-500 border-red-500 text-white shadow-lg shadow-red-500/30"
+                        : "bg-white border-gray-200 text-gray-600 hover:border-emerald-300 hover:bg-emerald-50"
+                      }`}>
+                      <input type="radio" name={`p-${itemActual.id}`} value={val} className="hidden"
+                        checked={itemActual.respuesta === val}
+                        onChange={() => responderYAvanzar(itemActual.id, val)} />
+                      {val === "SI" ? "CUMPLE" : "NO CUMPLE"}
+                    </label>
+                  ))}
+                </div>
+              )}
+
+              {/* <div className="flex flex-col sm:flex-row gap-4 justify-center mb-6">
                 {["SI", "NO"].map(val => (
                   <label key={val} className={`cursor-pointer flex-1 py-4 px-6 rounded-xl border-2 text-center font-bold transition-all ${
                     itemActual.respuesta === val
@@ -670,7 +761,7 @@ const LimpiezaUrbana: React.FC<FormularioProps> = ({ reporteParaEditar }) => {
                     {val === "SI" ? "CUMPLE" : "NO CUMPLE"}
                   </label>
                 ))}
-              </div>
+              </div> */}
 
               {/* Observaciones + GeoRef */}
               <div className="mt-auto space-y-3">
