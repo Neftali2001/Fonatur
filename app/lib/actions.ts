@@ -64,7 +64,7 @@ export async function crearReporte(formData: any, checklist: any, gps: any, foto
         ${JSON.stringify(checklist)},
         NOW(),
         ${categoria},
-        ${JSON.stringify(fotos ?? {})}
+        ${JSON.stringify(fotos ??'' )}
       )
     `;
   } catch (error) {
