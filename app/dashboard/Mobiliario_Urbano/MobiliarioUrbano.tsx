@@ -37,13 +37,13 @@ const PREGUNTAS: string[] = [
   "SUSTITUCIÓN DE TAPAS DE CONCRETO DIFERENTES EMPRESAS (TELECOMUNICACIONES, CFE Y ALUMBRADO)",
   "¿EL BARANDAL (ACERO INOXIDABLE O ACERO NORMAL) SE ENCUENTRA EN BUEN ESTADO GENERAL, SIN CORROSIÓN, SIN DEFORMACIONES, BIEN ALINEADO Y FIRMEMENTE ANCLADO?",
   "¿EL BARANDAL (ACERO INOXIDABLE O ACERO NORMAL) CUMPLE CON LA ALTURA Y LOS CRITERIOS DE SEGURIDAD, SIN TRAMOS FALTANTES O DAÑADOS?",
-  "ESTADO DE SEÑALETICAS (Bueno/Regular/Malo)",
-  "BALIZADO DE CALLE (Bueno/Regular/Malo)",
-  "ESTADO DE MURALES (Bueno/Regular/Malo)",
-  "ESTADO DEL BOLARDO (Bueno/Regular/Malo)",
-  "FIGURAS LÚDICAS (Bueno/Regular/Malo)",
-  "MANTENIMIENTO DE POSTE DE SEMAFORO (Bueno/Regular/Malo)",
-  "MANTENIMIENTO DE RAMPAS (Bueno/Regular/Malo)",
+  "ESTADO DE SEÑALETICAS ",
+  "BALIZADO DE CALLE ",
+  "ESTADO DE MURALES ",
+  "ESTADO DEL BOLARDO ",
+  "FIGURAS LÚDICAS ",
+  "MANTENIMIENTO DE POSTE DE SEMAFORO ",
+  "MANTENIMIENTO DE RAMPAS",
 
 ];
 
@@ -99,7 +99,7 @@ const MobiliarioUrbano: React.FC<FormularioProps> = ({ reporteParaEditar }) => {
     Tramo:             reporteParaEditar?.tramo             ?? '',
     accesoPublico:     reporteParaEditar?.acceso_publico    ?? '',
     tipoMantenimiento: reporteParaEditar?.tipo_mantenimiento ?? 'Ordinario',
-    categoria:         reporteParaEditar?.categoria         ?? 'ALUMBRADO PÚBLICO',
+    categoria:         reporteParaEditar?.categoria         ?? 'Mobiliario Urbano ',
   });
 
   const [gps, setGps] = useState<GpsCoords>({

@@ -49,6 +49,31 @@ const PREGUNTAS: string[] = [
   "ESTADO DE LÁMPARAS TIPO FRAGATA",
 ];
 
+// // ================= CONSTANTES =================
+// // "Agregar menu desplegable en el cual se puedan seleccionar diferentes tipos de alumbrado y dependiendo de ese tipo de alumbrado se desplige el cuestionario correspondiente",
+// const PREGUNTAS: string[] = [
+//   // "Alumbrado publico opcion",
+//   "OPERATIVIDAD: ¿PRENDE Y SE MANTIENE ESTABLE?",
+//   "LA FOTOCELDA, RELOJ OPERATIVO O FUSIBLE ¿CUMPLE CON SU FUNCIÓN?",
+//   "EL BRAZO Y BASE DEL POSTE ¿SE ENCUENTRA EN BUENAS CONDICIONES?",
+//   "ROBO DE CABLE/DAÑOS: SIN CORTES, SIN CABLES EXPUESTOS",
+//   "REGISTROS Y/O CONEXIONES VISIBLES CORRECTAMENTE CERRADOS",
+//   "ENTORNO Y SEGURIDAD SEGÚN ZONA (CAMELLÓN/BANQUETA)",
+//   "INTEGRIDAD DE LUMINARIA Y ÓPTICA",
+//   "ESTADO DE POSTE METÁLICO/CONCRETO",
+//     // "Cerillo",
+//   "OPERATIVIDAD: ¿PRENDE Y SE MANTIENE ESTABLE?",
+//   "ORIENTACIÓN ADECUADA SIN DESLUMBRAMIENTO",
+//   "PRENDE O NO PRENDE LAMPARA TIPO BOLARDO (CERILLO)",
+//   "MANTENIMIENTO A TRANSFORMADORES DE ALUMBRADO",
+//   "ESTADO FISICO DE LAMPARAS TIPO BOLARDO (CERILLO)",
+//     // "Parabuses",
+//   "ESTADO DE BASE DE CONCRETO",
+//   "ESTADO DE LÁMPARAS E ILUMINACIÓN DE PARABUSES",
+//   "ESTADO DE LÁMPARAS WALLPACK",
+//   "ESTADO DE LÁMPARAS TIPO FRAGATA",
+// ];
+
 const TRAMOS_POR_SECTOR: Record<string, string[]> = {
   "Barra de Coyuca":      ["Sendero-Seguro-Barra Coyuca"],
   "Pie de la Cuesta":     ["Sendero-seguro-Pie de la cuesta"],

@@ -5,8 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { put, del } from '@vercel/blob';
 
 
-// ✅ Ya no necesita "categoria" como parámetro separado — viene dentro de formData
-export async function crearReporte(formData: any, checklist: any, gps: any, fotos?: Record<string, string | null>) {
+export async function crearReporte(formData: any, checklist: any, gps: any, fotos: Record<string, string | null>) {
   
   const ahora = new Date();
   
