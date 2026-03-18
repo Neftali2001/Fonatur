@@ -71,12 +71,12 @@ const PREGUNTAS: string[] = [
   "LIXIVIADOS O DERRAMES ALREDEDOR DE BOTES O CONTENEDORES",
   "RESIDUOS DISPERSOS DESPUÉS DE LA RECOLECCIÓN",
   "PODA EN GRAL CADA 6 MESES",
-  "¿El canal pluvial presenta obstrucciones (basura, sedimentos, vegetación, lodo, etc.)?",
-  "¿El canal pluvial presenta daños estructurales (fisuras, desprendimientos, deformaciones, socavaciones?",
-  "¿El agua puede fluir libremente a través del canal pluvial?",
-  "¿Los accesos al canal (tapas, rejillas, registros) están en buen estado?",
-  "¿El canal pluvial se encuentra en buenas condiciones (sin obstrucciones, sin daño estructural y con flujo libre)?",
-  "Indique el estado actual de la rejilla pluvial (puede seleccionar más de una opción):",
+  "¿EL CANAL PLUVIAL PRESENTA OBSTRUCCIONES (BASURA, SEDIMENTOS, VEGETACIÓN, LODO, ETC.)?",
+  "¿EL CANAL PLUVIAL PRESENTA DAÑOS ESTRUCTURALES (FISURAS, DESPRENDIMIENTOS, DEFORMACIONES, SOCAVACIONES?",
+  "¿EL AGUA PUEDE FLUIR LIBREMENTE A TRAVÉS DEL CANAL PLUVIAL?",
+  "¿LOS ACCESOS AL CANAL (TAPAS, REJILLAS, REGISTROS) ESTÁN EN BUEN ESTADO?",
+  "¿EL CANAL PLUVIAL SE ENCUENTRA EN BUENAS CONDICIONES (SIN OBSTRUCCIONES, SIN DAÑO ESTRUCTURAL Y CON FLUJO LIBRE)?",
+  "INDIQUE EL ESTADO ACTUAL DE LA REJILLA PLUVIAL (PUEDE SELECCIONAR MÁS DE UNA OPCIÓN):",
 
 ];
 
