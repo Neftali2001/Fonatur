@@ -33,6 +33,7 @@ export async function crearReporte(formData: any, checklist: any, gps: any, foto
   const tipoMantenimiento = formData.tipoMantenimiento || 'Ordinario';
   const latitud  = gps?.lat ? parseFloat(gps.lat) : null;
   const longitud = gps?.lon ? parseFloat(gps.lon) : null;
+  
 
   // ✅ Se lee desde formData; si no viene, usa 'General' como fallback
   const categoria = formData.categoria || 'General';
