@@ -1,5 +1,10 @@
 'use client';
 
+
+import { usePDFQueue }          from '@/app/context/pdf-queue-context';
+import { generarPDFCombinado }  from '@/app/lib/generarPDFCombinado';
+
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   FaCrosshairs, FaCamera, FaFolderOpen, FaMapMarkedAlt,
@@ -103,14 +108,40 @@ const parsearChecklist = (raw: any): ChecklistItem[] | null => {
   } catch { return null; }
 };
 
+
+
+function mostrarOpcionesPostGuardado(): Promise<'otro_mismo' | 'otro_distinto' | 'generar_ahora'> {
+  return new Promise(resolve => {
+    // Usamos un confirm en dos pasos mientras no haya un modal personalizado.
+    // Puedes reemplazar esto con un Modal de shadcn/ui o similar.
+    const mismo = window.confirm(
+      "✅ Formulario guardado.\n\n" +
+      "¿Quieres llenar OTRO del MISMO tipo para añadirlo al PDF?\n\n" +
+      "(Cancelar = ir a otro formulario o generar PDF desde la cola)"
+    );
+    if (mismo) return resolve('otro_mismo');
+
+    const ahora = window.confirm(
+      "¿Generar el PDF AHORA con los formularios en cola?\n\n" +
+      "(Cancelar = seguir llenando otro tipo de formulario)"
+    );
+    resolve(ahora ? 'generar_ahora' : 'otro_distinto');
+  });
+}
+
 // ================= COMPONENTE =================
 const BarridoVialidades: React.FC<FormularioProps> = ({ reporteParaEditar }) => {
+
+
+  const { addToQueue } = usePDFQueue();
+
+
   const mapRef        = useRef<HTMLDivElement>(null);
   const watchId       = useRef<number | null>(null);
   const geoRefWatchId = useRef<number | null>(null);
 
   const [currentTime,           setCurrentTime]           = useState('');
-  const [formulariosAcumulados, setFormulariosAcumulados] = useState<any[]>([]);
+  // const [formulariosAcumulados, setFormulariosAcumulados] = useState<any[]>([]);
   const [capturandoGeoRefId,    setCapturandoGeoRefId]    = useState<number | null>(null);
   const [cargandoGps,           setCargandoGps]           = useState(false);
   const [sectorPersonalizado,   setSectorPersonalizado]   = useState('');
@@ -294,54 +325,112 @@ const BarridoVialidades: React.FC<FormularioProps> = ({ reporteParaEditar }) => 
     }
   }, [formData, sectorPersonalizado, tramoPersonalizado, checklist, gps, fotos, reporteParaEditar]);
 
-  const procesarFormularioActual = useCallback(async () => {
-    const sinResponder = checklist.filter(i => i.respuesta === "").length;
-    if (sinResponder > 0) {
-      const ok = window.confirm(`${sinResponder} pregunta(s) sin responder. ¿Continuar de todas formas?`);
-      if (!ok) return;
-    }
+  // const procesarFormularioActual = useCallback(async () => {
+  //   const sinResponder = checklist.filter(i => i.respuesta === "").length;
+  //   if (sinResponder > 0) {
+  //     const ok = window.confirm(`${sinResponder} pregunta(s) sin responder. ¿Continuar de todas formas?`);
+  //     if (!ok) return;
+  //   }
 
-    try {
-      await guardarCuestionario();
+  //   try {
+  //     await guardarCuestionario();
 
-      let mapImage: string | null = null;
-      if (gps.lat && mapRef.current) {
-        const canvas = await html2canvas(mapRef.current, {
-          useCORS: true, allowTaint: true, scale: 3,
-          ignoreElements: el => el.classList?.contains('leaflet-control-container'),
-        });
-        mapImage = canvas.toDataURL("image/png");
-      }
+  //     let mapImage: string | null = null;
+  //     if (gps.lat && mapRef.current) {
+  //       const canvas = await html2canvas(mapRef.current, {
+  //         useCORS: true, allowTaint: true, scale: 3,
+  //         ignoreElements: el => el.classList?.contains('leaflet-control-container'),
+  //       });
+  //       mapImage = canvas.toDataURL("image/png");
+  //     }
 
-      const sectorFinal = formData.sector === "Otro" ? sectorPersonalizado : formData.sector;
-      const tramoFinal  = formData.sector === "Otro" ? tramoPersonalizado  : formData.Tramo;
-      const formularioCompleto = {
-        formData:     { ...formData, sector: sectorFinal, Tramo: tramoFinal },
-        checklist:    [...checklist],
-        gps:          { ...gps },
-        fotos:        { ...fotos },
-        mapImage,
-        fechaCaptura: new Date(),
-      };
+  //     const sectorFinal = formData.sector === "Otro" ? sectorPersonalizado : formData.sector;
+  //     const tramoFinal  = formData.sector === "Otro" ? tramoPersonalizado  : formData.Tramo;
+  //     const formularioCompleto = {
+  //       formData:     { ...formData, sector: sectorFinal, Tramo: tramoFinal },
+  //       checklist:    [...checklist],
+  //       gps:          { ...gps },
+  //       fotos:        { ...fotos },
+  //       mapImage,
+  //       fechaCaptura: new Date(),
+  //     };
 
-      const nuevos = [...formulariosAcumulados, formularioCompleto];
-      setFormulariosAcumulados(nuevos);
+  //     const nuevos = [...formulariosAcumulados, formularioCompleto];
+  //     setFormulariosAcumulados(nuevos);
 
-      if (window.confirm("¿Deseas llenar OTRO formulario para el mismo PDF?")) {
-        limpiarFormulario();
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      } else {
-        await generarPDFMultiples(nuevos);
-        setFormulariosAcumulados([]);
-        limpiarFormulario();
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Error al procesar el formulario.");
-    }
-  }, [checklist, fotos, formData, formulariosAcumulados, gps, guardarCuestionario, limpiarFormulario, sectorPersonalizado, tramoPersonalizado]);
+  //     if (window.confirm("¿Deseas llenar OTRO formulario para el mismo PDF?")) {
+  //       limpiarFormulario();
+  //       window.scrollTo({ top: 0, behavior: 'smooth' });
+  //     } else {
+  //       await generarPDFMultiples(nuevos);
+  //       setFormulariosAcumulados([]);
+  //       limpiarFormulario();
+  //     }
+  //   } catch (err) {
+  //     console.error(err);
+  //     alert("Error al procesar el formulario.");
+  //   }
+  // }, [checklist, fotos, formData, formulariosAcumulados, gps, guardarCuestionario, limpiarFormulario, sectorPersonalizado, tramoPersonalizado]);
 
   // ================= PDF =================
+ const procesarFormularioActual = useCallback(async () => {
+  const sinResponder = checklist.filter(i => i.respuesta === "").length;
+  if (sinResponder > 0 && !window.confirm(`${sinResponder} pregunta(s) sin responder. ¿Continuar?`)) return;
+
+  try {
+    await guardarCuestionario();
+
+    let mapImage: string | null = null;
+    if (gps.lat && mapRef.current) {
+      const canvas = await html2canvas(mapRef.current, {
+        useCORS: true, allowTaint: true, scale: 3,
+        ignoreElements: el => el.classList?.contains('leaflet-control-container'),
+      });
+      mapImage = canvas.toDataURL("image/png");
+    }
+
+    const sectorFinal = formData.sector === "Otro" ? sectorPersonalizado : formData.sector;
+    const tramoFinal  = formData.sector === "Otro" ? tramoPersonalizado  : formData.Tramo;
+
+    // Agregar a la cola global (persiste al navegar entre formularios)
+    addToQueue({
+      categoria:    formData.categoria,
+      formData:     { ...formData, sector: sectorFinal, Tramo: tramoFinal },
+      checklist:    [...checklist],
+      gps:          { ...gps },
+      fotos:        { ...fotos },
+      mapImage,
+      fechaCaptura: new Date(),
+    });
+
+    // Opciones post-guardado
+    const opcion = await mostrarOpcionesPostGuardado();
+    //  'otro_mismo'    → otro formulario del MISMO tipo
+    //  'otro_distinto' → ir a otro formulario (la cola ya tiene éste)
+    //  'generar_ahora' → generar PDF inmediatamente con lo acumulado
+
+    if (opcion === 'otro_mismo') {
+      limpiarFormulario();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else if (opcion === 'generar_ahora') {
+      // Obtenemos la cola actualizada del contexto (ver nota abajo *)
+      // La función PDFQueueButton también puede hacer esto; aquí lo dejamos
+      // como acción directa opcional.
+      limpiarFormulario();
+    }
+    // 'otro_distinto': no hace nada → usuario navega al siguiente formulario
+    //                  el botón flotante PDFQueueButton mostrará la cola.
+
+  } catch (err) {
+    console.error(err);
+    alert("Error al procesar el formulario.");
+  }
+  // Nota: formulariosAcumulados ya no está en las deps
+}, [addToQueue, checklist, fotos, formData, gps, guardarCuestionario, limpiarFormulario, sectorPersonalizado, tramoPersonalizado]);
+ 
+ 
+ 
+ 
   const generarPDFMultiples = async (lista: any[]) => {
     const doc        = new jsPDF("p", "mm", "a4");
     const pageWidth  = doc.internal.pageSize.getWidth();
