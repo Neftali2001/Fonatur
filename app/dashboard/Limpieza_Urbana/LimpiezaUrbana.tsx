@@ -250,25 +250,42 @@ const LimpiezaUrbana: React.FC<FormularioProps> = ({ reporteParaEditar }) => {
 
   const responderYAvanzar = useCallback((id: number, valor: string) => {
     handleChecklistChange(id, 'respuesta', valor);
-    setPreguntaActual(prev => prev < PREGUNTAS.length - 1 ? prev + 1 : prev);
+    // setPreguntaActual(prev => prev < PREGUNTAS.length - 1 ? prev + 1 : prev);
   }, [handleChecklistChange]);
 
-  // Subir imagen: guardar en JPEG (consistente con addImage "JPEG" en PDF)
   const handleImageUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>, tipo: string) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const img = new Image();
-    img.onload = () => {
-      const maxW = 1200; // resolución más alta = mejor calidad en PDF
-      const ratio = Math.min(maxW / img.width, 1);
-      const canvas = document.createElement('canvas');
-      canvas.width  = img.width  * ratio;
-      canvas.height = img.height * ratio;
-      canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
-      setFotos(prev => ({ ...prev, [tipo]: canvas.toDataURL('image/jpeg', 0.92) }));
-    };
-    img.src = URL.createObjectURL(file);
-  }, []);
+  const file = e.target.files?.[0];
+  if (!file) return;
+  const img = new Image();
+  img.onload = () => {
+    // Reducimos el ancho máximo a 800px para evitar payloads masivos
+    const ratio = Math.min(800 / img.width, 1); 
+    const canvas = document.createElement('canvas');
+    canvas.width = img.width * ratio; 
+    canvas.height = img.height * ratio;
+    canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+    
+    // Reducimos la calidad al 60% (0.6). En móviles y PDFs es imperceptible la diferencia.
+    setFotos(prev => ({ ...prev, [tipo]: canvas.toDataURL('image/jpeg', 0.6) }));
+  };
+  img.src = URL.createObjectURL(file);
+}, []);
+  // Subir imagen: guardar en JPEG (consistente con addImage "JPEG" en PDF)
+  // const handleImageUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>, tipo: string) => {
+  //   const file = e.target.files?.[0];
+  //   if (!file) return;
+  //   const img = new Image();
+  //   img.onload = () => {
+  //     const maxW = 1200; // resolución más alta = mejor calidad en PDF
+  //     const ratio = Math.min(maxW / img.width, 1);
+  //     const canvas = document.createElement('canvas');
+  //     canvas.width  = img.width  * ratio;
+  //     canvas.height = img.height * ratio;
+  //     canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+  //     setFotos(prev => ({ ...prev, [tipo]: canvas.toDataURL('image/jpeg', 0.92) }));
+  //   };
+  //   img.src = URL.createObjectURL(file);
+  // }, []);
 
   const limpiarFormulario = useCallback(() => {
     setPreguntaActual(0);

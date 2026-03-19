@@ -193,22 +193,39 @@ const AreasVerdes: React.FC<FormularioProps> = ({ reporteParaEditar }) => {
 
   const responderYAvanzar = useCallback((id: number, valor: string) => {
     handleChecklistChange(id, 'respuesta', valor);
-    setPreguntaActual(prev => prev < PREGUNTAS.length - 1 ? prev + 1 : prev);
   }, [handleChecklistChange]);
 
+
   const handleImageUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>, tipo: string) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const img = new Image();
-    img.onload = () => {
-      const ratio = Math.min(1200 / img.width, 1);
-      const canvas = document.createElement('canvas');
-      canvas.width = img.width * ratio; canvas.height = img.height * ratio;
-      canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
-      setFotos(prev => ({ ...prev, [tipo]: canvas.toDataURL('image/jpeg', 0.92) }));
-    };
-    img.src = URL.createObjectURL(file);
-  }, []);
+  const file = e.target.files?.[0];
+  if (!file) return;
+  const img = new Image();
+  img.onload = () => {
+    // Reducimos el ancho máximo a 800px para evitar payloads masivos
+    const ratio = Math.min(800 / img.width, 1); 
+    const canvas = document.createElement('canvas');
+    canvas.width = img.width * ratio; 
+    canvas.height = img.height * ratio;
+    canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+    
+    // Reducimos la calidad al 60% (0.6). En móviles y PDFs es imperceptible la diferencia.
+    setFotos(prev => ({ ...prev, [tipo]: canvas.toDataURL('image/jpeg', 0.6) }));
+  };
+  img.src = URL.createObjectURL(file);
+}, []);
+  // const handleImageUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>, tipo: string) => {
+  //   const file = e.target.files?.[0];
+  //   if (!file) return;
+  //   const img = new Image();
+  //   img.onload = () => {
+  //     const ratio = Math.min(1200 / img.width, 1);
+  //     const canvas = document.createElement('canvas');
+  //     canvas.width = img.width * ratio; canvas.height = img.height * ratio;
+  //     canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+  //     setFotos(prev => ({ ...prev, [tipo]: canvas.toDataURL('image/jpeg', 0.92) }));
+  //   };
+  //   img.src = URL.createObjectURL(file);
+  // }, []);
 
   const limpiarFormulario = useCallback(() => {
     setPreguntaActual(0);
