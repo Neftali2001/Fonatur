@@ -26,7 +26,7 @@ const links: LinkItem[] = [
   { name: 'Limpieza Urbana',    href: '/dashboard/Limpieza_Urbana',     icon: BsTrash3Fill },
   { name: 'Mobiliario Urbano',  href: '/dashboard/Mobiliario_Urbano',   icon: BiChair },
   { name: 'Pineo Alumbrado',  href: '/dashboard/PineoA',   icon: GiStreetLight },
-  // { name: 'Vehículo',           href: '/dashboard/vehiculo',            icon: Car       },
+  { name: 'Vehículo',           href: '/dashboard/vehiculo',            icon: Car       },
   { name: 'Historial',          href: '/dashboard/Historial',           icon: Clock     },
 ];
 
