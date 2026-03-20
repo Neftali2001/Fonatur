@@ -19,7 +19,7 @@ type LinkItem = {
 };
 
 const links: LinkItem[] = [
-  { name: 'Home',               href: '/dashboard',                     icon: GrMap       },
+  // { name: 'Home',               href: '/dashboard',                     icon: GrMap       },
   { name: 'Alumbrado público',  href: '/dashboard/Alumbrado_publico',   icon: GiStreetLight },
   { name: 'Áreas verdes',       href: '/dashboard/Areas_verdes',        icon: GiFruitTree  },
   { name: 'Barrido vialidades', href: '/dashboard/Barrido_vialidades',  icon: GiBroom     },
