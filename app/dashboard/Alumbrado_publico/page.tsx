@@ -1,6 +1,7 @@
 // app/dashboard/Alumbrado_publico/page.tsx
 import { sql } from '@vercel/postgres';
-import { obtenerReportePorId } from '@/app/lib/actions';
+import { obtenerReporteConEvidencias } from '@/app/lib/actions';
+// import { obtenerReportePorId } from '@/app/lib/actions';
 import FormularioAlumbrado from './FormularioAlumbrado';
 
 interface PageProps {
@@ -25,7 +26,9 @@ export default async function Page({ searchParams }: PageProps) {
 
   const [reportesPrevios, reporteParaEditar] = await Promise.all([
     getReportes(),
-    editId ? obtenerReportePorId(editId) : Promise.resolve(null),
+    // editId ? obtenerReportePorId(editId) : Promise.resolve(null),
+        editId ? obtenerReporteConEvidencias(editId) : Promise.resolve(null),
+
   ]);
 
   return (

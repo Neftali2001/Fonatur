@@ -239,7 +239,12 @@ export default async function HistorialPage({ searchParams }: HistorialPageProps
 
                   {/* Acciones */}
                   <div className="flex gap-3 justify-end md:px-6 md:py-4 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                    <Link href={`/dashboard/${getRuta(reporte.categoria)}?editId=${reporte.id}`}
+                    {/* <Link href={`/dashboard/${getRuta(reporte.categoria)}?editId=${reporte.id}`}
+                      className="p-2 md:p-2.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+                      title="Editar">
+                      <FaEdit size={16} />
+                    </Link> */}
+                    <Link href={`/dashboard/PineoA?editId=${reporte.id}`}
                       className="p-2 md:p-2.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
                       title="Editar">
                       <FaEdit size={16} />
