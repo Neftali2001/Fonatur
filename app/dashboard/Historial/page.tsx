@@ -297,8 +297,6 @@ export default async function HistorialPage({ searchParams }: HistorialPageProps
   );
 }
 
-
-
 // import { sql } from '@vercel/postgres';
 // import { FaTrash, FaEdit, FaMapMarkerAlt, FaSearch } from 'react-icons/fa';
 // import { eliminarReporte } from '@/app/lib/actions';
