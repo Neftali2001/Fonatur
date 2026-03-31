@@ -160,6 +160,12 @@ const CATALOGO: Record<string, Record<string, Seccion[]>> = {
         'BORDES/GUARNICIONES DEL ARRIATE EN BUEN ESTADO (SIN INVASIÓN A BANQUETA)',
       ],
     }],
+      '10. Jardinera rota': [{
+      titulo: '10. Jardinera rota',
+      items: [
+        '¿LA JARDINERA PRESENTA ALGUN DAÑO?',
+      ],
+    }],
   },
 
   'LIMPIEZA URBANA': {
@@ -230,10 +236,10 @@ const TRAMOS_POR_SECTOR: Record<string, string[]> = {
   'Pie de la Cuesta':     ['Sendero-seguro-Pie de la cuesta'],
   'Barrios Historicos':   ['Caleta-caletilla', 'Sendero-Costera-antigua', 'Corredor Zocalo-quebrada', 'Corredor zocalo-fuerte'],
   'Acapulco Tradicional': ['Sendero-Tadeo-arredondo', 'Sendero-cinerio-hornitos', 'Michoacan', 'Av. Universidad', 'Dr. Ignacio chavez'],
-  'Acapulco Dorado':      ['Costa azul'],
+  'Acapulco Dorado':      ['Costa azul', 'Condesa', 'La diana', 'Parque papagayo', 'Papagayo-Edifico inteligente', 'El zocalo', 'Zocalo-Caleta'],
   'Las Brisas':           [''],
   'Puerto Márquez':       ['Sendero-Puerto-Marquez'],
-  'Acapulco Diamante':    ['Av. Costera Palmas'],
+  'Acapulco Diamante':    ['Av. Costera Palmas', 'Boulevar de las naciones', 'Revolcadero'],
   'Otro':                 [''],
 };
 
