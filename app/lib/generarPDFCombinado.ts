@@ -94,9 +94,9 @@ export function mostrarOpcionesPostGuardado(): Promise<'otro_mismo' | 'otro_dist
 //  • Cada evidencia adicional de un ítem = fila extra en la tabla
 //
 //  🔧 FIX CRÍTICO: Se usa un contador global `_imgAlias` para los aliases de
-//     imágenes en jsPDF. Sin esto, cada tabla nueva reinicia el índice a 0 y
-//     jsPDF reutiliza la imagen cacheada del alias anterior, mostrando la foto
-//     equivocada (o ninguna) para cualquier imagen que no sea la primera.
+//    imágenes en jsPDF. Sin esto, cada tabla nueva reinicia el índice a 0 y
+//    jsPDF reutiliza la imagen cacheada del alias anterior, mostrando la foto
+//    equivocada (o ninguna) para cualquier imagen que no sea la primera.
 // ══════════════════════════════════════════════════════════════════════════════
 export async function generarPDFCombinado(lista: QueuedForm[]): Promise<string> {
   const doc   = new jsPDF('p', 'mm', 'a4');
@@ -181,6 +181,7 @@ export async function generarPDFCombinado(lista: QueuedForm[]): Promise<string> 
 
     const sectores  = [...new Set(formsGrupo.map(f => f.formData.sector).filter(Boolean))].join(', ') || '—';
     const tramos    = [...new Set(formsGrupo.map(f => f.formData.Tramo ).filter(Boolean))].join(', ') || '—';
+    const accesos   = [...new Set(formsGrupo.map(f => (f.formData as any).accesoPublico).filter(Boolean))].join(', ') || '—';
     const tipo      = formsGrupo[0].formData.tipoMantenimiento ?? 'N/E';
     const fechaBase = formsGrupo[0].fechaCaptura instanceof Date
       ? formsGrupo[0].fechaCaptura
@@ -191,7 +192,7 @@ export async function generarPDFCombinado(lista: QueuedForm[]): Promise<string> 
     doc.setFont('helvetica', 'normal').setFontSize(8.5);
     doc.text(`Folio: ${folio}`, mg, y);
     doc.text(`Fecha: ${fechaStr}   Hora: ${horaStr}`, pageW / 2, y, { align: 'center' }); y += 5;
-    doc.text(`Sector: ${sectores}    Tramo: ${tramos}`, mg, y);
+    doc.text(`Sector: ${sectores}    Tramo: ${tramos}    Acceso Público: ${accesos}`, mg, y);
     doc.setFont('helvetica', 'bold');
     doc.text(`TIPO: ${tipo.toUpperCase()}`, pageW - mg, y, { align: 'right' });
     doc.setFont('helvetica', 'normal'); y += 7;
@@ -457,6 +458,474 @@ export async function generarPDFCombinado(lista: QueuedForm[]): Promise<string> 
   doc.save(`${folio}.pdf`);
   return doc.output('datauristring');
 }
+
+
+
+
+
+
+
+
+
+// import jsPDF from 'jspdf';
+// import autoTable from 'jspdf-autotable';
+// import type { QueuedForm } from '@/app/context/pdf-queue-context';
+
+// // ── Tipos ──────────────────────────────────────────────────────────────────
+// type GeoRef = { lat: string; lon: string; precision: string; timestamp: string };
+
+// type EvidenceEntry = {
+//   id: number;
+//   observation: string;
+//   geoRef: GeoRef | null;
+//   photo: string | null;
+// };
+
+// type ChecklistItem = {
+//   id: number | string;
+//   pregunta: string;
+//   respuesta: string;
+//   observacion: string;
+//   seccion?: string;
+//   foto?: string | null;
+//   geoRef?: GeoRef | null;
+//   // Nuevo modelo con múltiples evidencias (FormularioUnificado)
+//   evidence?: EvidenceEntry[];
+// };
+
+// // Paleta: todo negro/gris
+// const C = {
+//   black:    [0,   0,   0  ] as [number, number, number],
+//   darkGray: [45,  45,  45 ] as [number, number, number],
+//   midGray:  [90,  90,  90 ] as [number, number, number],
+//   lightGray:[220, 220, 220] as [number, number, number],
+//   white:    [255, 255, 255] as [number, number, number],
+//   rowBg:    [250, 250, 250] as [number, number, number],
+//   green:    [20,  110,  60] as [number, number, number],
+// };
+
+// // ── Helpers ────────────────────────────────────────────────────────────────
+
+// /**
+//  * Detecta el formato de imagen desde un data URI.
+//  * jsPDF necesita 'JPEG' o 'PNG' como string explícito.
+//  */
+// function detectImageFormat(dataUri: string): 'JPEG' | 'PNG' | 'WEBP' {
+//   if (dataUri.startsWith('data:image/png'))  return 'PNG';
+//   if (dataUri.startsWith('data:image/webp')) return 'WEBP';
+//   return 'JPEG'; // default — canvas.toDataURL('image/jpeg') siempre produce JPEG
+// }
+
+// /** Extrae todas las evidencias de un ítem, sea modelo viejo o nuevo */
+// function getEvidences(item: ChecklistItem): Array<{
+//   obs: string; lat: string; lon: string; foto: string | null;
+// }> {
+//   // Modelo nuevo: evidence[]
+//   if (Array.isArray(item.evidence) && item.evidence.length > 0) {
+//     return item.evidence
+//       .filter(e => e.observation || e.geoRef || e.photo)
+//       .map(e => ({
+//         obs:  e.observation || '',
+//         lat:  e.geoRef?.lat ?? '',
+//         lon:  e.geoRef?.lon ?? '',
+//         foto: e.photo ?? null,
+//       }));
+//   }
+//   // Modelo viejo: observacion + geoRef planos
+//   const tieneAlgo = !!(item.observacion?.trim() || item.geoRef || item.foto);
+//   if (!tieneAlgo) return [];
+//   return [{
+//     obs:  item.observacion || '',
+//     lat:  item.geoRef?.lat ?? '',
+//     lon:  item.geoRef?.lon ?? '',
+//     foto: item.foto ?? null,
+//   }];
+// }
+
+// const tieneEvidencia = (item: ChecklistItem): boolean => getEvidences(item).length > 0;
+
+// export function mostrarOpcionesPostGuardado(): Promise<'otro_mismo' | 'otro_distinto' | 'generar_ahora'> {
+//   return new Promise(resolve => {
+//     if (window.confirm('✅ Formulario guardado.\n\n¿Llenar OTRO del mismo tipo?\n(Cancelar = usar cola flotante)'))
+//       return resolve('otro_mismo');
+//     resolve(
+//       window.confirm('¿Generar el PDF AHORA con la cola?\n(Cancelar = seguir con otro tipo)')
+//         ? 'generar_ahora' : 'otro_distinto'
+//     );
+//   });
+// }
+
+// // ══════════════════════════════════════════════════════════════════════════════
+// //  FUNCIÓN PRINCIPAL
+// //  • Agrupa por categoría → un solo encabezado por categoría
+// //  • head de autoTable tiene: [banda negra de cat] + [fila de columnas]
+// //    → se repite automáticamente en saltos de página, nunca se duplica
+// //  • Cada evidencia adicional de un ítem = fila extra en la tabla
+// //
+// //  🔧 FIX CRÍTICO: Se usa un contador global `_imgAlias` para los aliases de
+// //     imágenes en jsPDF. Sin esto, cada tabla nueva reinicia el índice a 0 y
+// //     jsPDF reutiliza la imagen cacheada del alias anterior, mostrando la foto
+// //     equivocada (o ninguna) para cualquier imagen que no sea la primera.
+// // ══════════════════════════════════════════════════════════════════════════════
+// export async function generarPDFCombinado(lista: QueuedForm[]): Promise<string> {
+//   const doc   = new jsPDF('p', 'mm', 'a4');
+//   const pageW = doc.internal.pageSize.getWidth();
+//   const pageH = doc.internal.pageSize.getHeight();
+//   const mg    = 12; // margin
+
+//   // Anchos de columna: 6 columnas, suma = 210-24 = 186mm
+//   // No. | Concepto | X | Y | Observaciones | Foto
+//   const CW = { no: 8, concepto: 60, x: 22, y: 22, obs: 50, foto: 24 };
+//   const NCOLS = 6;
+
+//   const folio = `REV-COMB-${Math.floor(Math.random() * 9000 + 1000)}`;
+
+//   // ── 🔧 CONTADOR GLOBAL DE ALIAS ────────────────────────────────────────
+//   // CRÍTICO: jsPDF cachea imágenes por alias. Si dos tablas distintas tienen
+//   // una imagen en row.index === 0, ambas usarían el alias "fotoR0" y jsPDF
+//   // devolvería la misma imagen cacheada para ambas.
+//   // Solución: alias único e irrepetible para cada imagen del documento.
+//   let _imgAlias = 0;
+
+//   const aplicarMarcaDeAgua = () => {
+//     const total = doc.getNumberOfPages();
+//     for (let i = 1; i <= total; i++) {
+//       doc.setPage(i);
+//       doc.saveGraphicsState();
+//       doc.setGState(new (doc as any).GState({ opacity: 0.07 }));
+//       try {
+//         doc.addImage('/logo_fonatur.png', 'PNG', (pageW - 140) / 2, (pageH - 40) / 2, 140, 40);
+//       } catch { /* logo no disponible */ }
+//       doc.restoreGraphicsState();
+//     }
+//   };
+
+//   // ── Portada ───────────────────────────────────────────────────────────
+//   if (lista.length > 1) {
+//     let y = 30;
+//     doc.setFont('helvetica', 'bold').setFontSize(15);
+//     doc.text('REPORTE COMBINADO – CIP ACAPULCO-COYUCA', mg, y); y += 8;
+//     doc.setFont('helvetica', 'normal').setFontSize(10);
+//     doc.text(`Folio: ${folio}`, mg, y); y += 4;
+//     doc.setLineWidth(0.5).line(mg, y, pageW - mg, y); y += 8;
+//     doc.setFont('helvetica', 'bold').setFontSize(11).text('Contenido:', mg, y); y += 7;
+//     doc.setFont('helvetica', 'normal').setFontSize(10);
+//     lista.forEach((form, idx) => {
+//       const fecha = form.fechaCaptura instanceof Date
+//         ? form.fechaCaptura.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' })
+//         : new Date(form.fechaCaptura).toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' });
+//       const sub   = (form.formData as any).subTipo ? ` › ${(form.formData as any).subTipo}` : '';
+//       doc.text(
+//         `${idx + 1}. ${form.categoria}${sub}  —  ${form.formData.sector || '—'} / ${form.formData.Tramo || '—'}  (${fecha})`,
+//         mg + 4, y
+//       );
+//       y += 6;
+//     });
+//     doc.addPage();
+//   }
+
+//   // ── Agrupar por categoría (orden de aparición) ─────────────────────────
+//   const ordenCats: string[] = [];
+//   const grupos = new Map<string, QueuedForm[]>();
+//   for (const form of lista) {
+//     if (!grupos.has(form.categoria)) {
+//       grupos.set(form.categoria, []);
+//       ordenCats.push(form.categoria);
+//     }
+//     grupos.get(form.categoria)!.push(form);
+//   }
+
+//   let primerGrupo = true;
+
+//   for (const cat of ordenCats) {
+//     const formsGrupo = grupos.get(cat)!;
+//     if (!primerGrupo) doc.addPage();
+//     primerGrupo = false;
+
+//     // ── Texto de encabezado general ──────────────────────────────────
+//     let y = 20;
+//     doc.setFont('helvetica', 'bold').setFontSize(12);
+//     doc.text('REPORTE DE MANTENIMIENTO – CIP ACAPULCO-COYUCA', mg, y); y += 4;
+//     doc.setLineWidth(0.4).line(mg, y, pageW - mg, y); y += 5;
+
+//     const sectores  = [...new Set(formsGrupo.map(f => f.formData.sector).filter(Boolean))].join(', ') || '—';
+//     const tramos    = [...new Set(formsGrupo.map(f => f.formData.Tramo ).filter(Boolean))].join(', ') || '—';
+//     const tipo      = formsGrupo[0].formData.tipoMantenimiento ?? 'N/E';
+//     const fechaBase = formsGrupo[0].fechaCaptura instanceof Date
+//       ? formsGrupo[0].fechaCaptura
+//       : new Date(formsGrupo[0].fechaCaptura);
+//     const fechaStr  = fechaBase.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' });
+//     const horaStr   = fechaBase.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+
+//     doc.setFont('helvetica', 'normal').setFontSize(8.5);
+//     doc.text(`Folio: ${folio}`, mg, y);
+//     doc.text(`Fecha: ${fechaStr}   Hora: ${horaStr}`, pageW / 2, y, { align: 'center' }); y += 5;
+//     doc.text(`Sector: ${sectores}    Tramo: ${tramos}`, mg, y);
+//     doc.setFont('helvetica', 'bold');
+//     doc.text(`TIPO: ${tipo.toUpperCase()}`, pageW - mg, y, { align: 'right' });
+//     doc.setFont('helvetica', 'normal'); y += 7;
+
+//     // ── Construir filas del body ──────────────────────────────────────
+//     type RowType = 'sep' | 'data';
+//     const bodyRows: any[] = [];
+//     const rowTypes: Array<{ type: RowType; foto?: string | null }> = [];
+
+//     const subTiposUnicos = [...new Set(
+//       formsGrupo.map(f => (f.formData as any).subTipo).filter(Boolean)
+//     )] as string[];
+//     let lastSeccion = '';
+
+//     formsGrupo.forEach(form => {
+//       const checklist = (form.checklist as ChecklistItem[]).filter(tieneEvidencia);
+//       if (checklist.length === 0) return;
+
+//       const subTipo = (form.formData as any).subTipo as string | undefined;
+
+//       // Banda de sub-tipo
+//       const mostrarBandaSub = subTipo && (subTiposUnicos.length > 1 || subTipo !== cat);
+//       if (mostrarBandaSub && subTipo !== lastSeccion) {
+//         bodyRows.push([{
+//           content: subTipo,
+//           colSpan: NCOLS,
+//           styles: {
+//             halign: 'center', fontStyle: 'bold', fontSize: 9.5,
+//             fillColor: C.darkGray, textColor: C.white,
+//             cellPadding: { top: 3.5, bottom: 3.5, left: 4, right: 4 },
+//           },
+//         }]);
+//         rowTypes.push({ type: 'sep' });
+//         lastSeccion = subTipo!.toUpperCase().trim();
+//       }
+
+//       checklist.forEach(item => {
+//         const evidences = getEvidences(item);
+//         const seccion   = item.seccion ?? '';
+
+//         // Banda de sección interna
+//         const seccionUp = seccion.toUpperCase().trim();
+//         const subTipoUp = (subTipo ?? '').toUpperCase().trim();
+//         const catUp     = cat.toUpperCase().trim();
+//         if (
+//           seccion &&
+//           seccionUp !== lastSeccion.toUpperCase().trim() &&
+//           seccionUp !== subTipoUp &&
+//           seccionUp !== catUp
+//         ) {
+//           bodyRows.push([{
+//             content: seccion,
+//             colSpan: NCOLS,
+//             styles: {
+//               halign: 'left', fontStyle: 'bold', fontSize: 8.5,
+//               fillColor: C.lightGray, textColor: C.black,
+//               cellPadding: { top: 3, bottom: 3, left: 8, right: 4 },
+//             },
+//           }]);
+//           rowTypes.push({ type: 'sep' });
+//           lastSeccion = seccion.toUpperCase().trim();
+//         }
+
+//         // Una fila por evidencia
+//         evidences.forEach((ev, ei) => {
+//           const esExtra = ei > 0;
+//           bodyRows.push([
+//             // No.
+//             {
+//               content: esExtra ? '' : String(item.id),
+//               styles: {
+//                 halign: 'center', fontSize: 7.5, fontStyle: esExtra ? 'normal' : 'bold',
+//                 valign: 'middle',
+//                 fillColor: esExtra ? C.rowBg : C.white,
+//               },
+//             },
+//             // Concepto
+//             {
+//               content: esExtra ? `↳ Evidencia ${ei + 1}` : item.pregunta,
+//               styles: {
+//                 fontSize: 7.5, fontStyle: esExtra ? 'italic' : 'normal',
+//                 valign: 'middle',
+//                 fillColor: esExtra ? C.rowBg : C.white,
+//                 textColor: esExtra ? C.midGray : C.black,
+//               },
+//             },
+//             // X (lat)
+//             {
+//               content: ev.lat,
+//               styles: {
+//                 halign: 'center', fontSize: 7,
+//                 textColor: ev.lat ? C.green : C.black,
+//                 valign: 'middle',
+//                 fillColor: esExtra ? C.rowBg : C.white,
+//               },
+//             },
+//             // Y (lon)
+//             {
+//               content: ev.lon,
+//               styles: {
+//                 halign: 'center', fontSize: 7,
+//                 textColor: ev.lon ? C.green : C.black,
+//                 valign: 'middle',
+//                 fillColor: esExtra ? C.rowBg : C.white,
+//               },
+//             },
+//             // Observaciones
+//             {
+//               content: ev.obs,
+//               styles: {
+//                 fontSize: 7.5, valign: 'top',
+//                 fillColor: esExtra ? C.rowBg : C.white,
+//               },
+//             },
+//             // Foto — contenido vacío; se dibuja en didDrawCell
+//             {
+//               content: '',
+//               styles: {
+//                 halign: 'center', valign: 'middle',
+//                 fillColor: esExtra ? C.rowBg : C.white,
+//                 minCellHeight: 24,
+//               },
+//             },
+//           ]);
+//           // 🔧 FIX: guardamos la foto en rowTypes para recuperarla en didDrawCell
+//           rowTypes.push({ type: 'data', foto: ev.foto });
+//         });
+//       });
+//     });
+
+//     if (bodyRows.length === 0) {
+//       doc.setFont('helvetica', 'italic').setFontSize(9).setTextColor(120, 120, 120);
+//       doc.text('No se registraron evidencias en esta categoría.', mg, y);
+//       doc.setFont('helvetica', 'normal').setTextColor(0, 0, 0);
+//       continue;
+//     }
+
+//     // ── autoTable ──────────────────────────────────────────────────
+//     autoTable(doc, {
+//       startY: y,
+//       margin: { left: mg, right: mg },
+
+//       head: [
+//         // Fila 0 — banda de categoría (negra)
+//         [{
+//           content: cat,
+//           colSpan: NCOLS,
+//           styles: {
+//             halign: 'center', fontStyle: 'bold', fontSize: 11,
+//             fillColor: C.black, textColor: C.white,
+//             cellPadding: { top: 5, bottom: 5, left: 4, right: 4 },
+//           },
+//         }],
+//         // Fila 1 — nombres de columnas
+//         [
+//           { content: 'N.',               styles: { halign: 'center' } },
+//           { content: 'Concepto / Incidencia' },
+//           { content: 'X (Lat)',            styles: { halign: 'center' } },
+//           { content: 'Y (Lon)',            styles: { halign: 'center' } },
+//           { content: 'Observaciones' },
+//           { content: 'Foto',              styles: { halign: 'center' } },
+//         ],
+//       ],
+//       headStyles: {
+//         fillColor:   C.midGray,
+//         textColor:   C.white,
+//         fontStyle:   'bold',
+//         fontSize:    7.5,
+//         halign:      'center',
+//         cellPadding: 2.5,
+//       },
+
+//       body: bodyRows,
+//       theme: 'grid',
+
+//       styles: {
+//         lineWidth:     0.15,
+//         lineColor:     [180, 180, 180] as any,
+//         fontSize:      7.5,
+//         cellPadding:   2.5,
+//         overflow:      'linebreak',
+//         minCellHeight: 9,
+//       },
+//       columnStyles: {
+//         0: { cellWidth: CW.no,      halign: 'center' },
+//         1: { cellWidth: CW.concepto },
+//         2: { cellWidth: CW.x,       halign: 'center' },
+//         3: { cellWidth: CW.y,       halign: 'center' },
+//         4: { cellWidth: CW.obs },
+//         5: { cellWidth: CW.foto,    halign: 'center', minCellHeight: 24 },
+//       },
+
+//       didDrawCell: (data: any) => {
+//         // Solo columna de foto, solo sección body
+//         if (data.section !== 'body' || data.column.index !== 5) return;
+
+//         const meta = rowTypes[data.row.index];
+//         if (!meta || meta.type !== 'data' || !meta.foto) return;
+
+//         // Validar que el dato sea un data URI válido
+//         const foto = meta.foto;
+//         if (typeof foto !== 'string' || !foto.startsWith('data:')) return;
+
+//         try {
+//           const fmt    = detectImageFormat(foto);
+//           const props  = doc.getImageProperties(foto);
+//           const maxW   = CW.foto - 2;
+//           const maxH   = data.cell.height - 2;
+//           const ratio  = Math.min(maxW / props.width, maxH / props.height);
+//           const dw     = props.width  * ratio;
+//           const dh     = props.height * ratio;
+
+//           // ✅ FIX CRÍTICO: alias único global evita colisiones entre tablas/categorías.
+//           // Con alias duplicados, jsPDF reutiliza la imagen cacheada de la primera tabla.
+//           const alias = `img_${_imgAlias++}`;
+
+//           doc.addImage(
+//             foto, fmt,
+//             data.cell.x + (CW.foto - dw) / 2,
+//             data.cell.y + (data.cell.height - dh) / 2,
+//             dw, dh,
+//             alias,
+//             'FAST'
+//           );
+//         } catch (err) {
+//           // Imagen inválida o corrompida — dibujar un placeholder visual
+//           try {
+//             doc.setDrawColor(200, 200, 200);
+//             doc.setFillColor(245, 245, 245);
+//             doc.rect(
+//               data.cell.x + 1, data.cell.y + 1,
+//               CW.foto - 2, data.cell.height - 2,
+//               'FD'
+//             );
+//             doc.setFontSize(5).setTextColor(150, 150, 150);
+//             doc.text('?', data.cell.x + CW.foto / 2, data.cell.y + data.cell.height / 2, { align: 'center' });
+//             doc.setTextColor(0, 0, 0);
+//           } catch { /* noop */ }
+//         }
+//       },
+
+//       rowPageBreak: 'avoid',
+//     });
+
+//     // Nota al pie
+//     const totalItems = formsGrupo.reduce(
+//       (acc, f) => acc + (f.checklist as ChecklistItem[]).length, 0
+//     );
+//     const conEv = formsGrupo.reduce(
+//       (acc, f) => acc + (f.checklist as ChecklistItem[]).filter(tieneEvidencia).length, 0
+//     );
+//     const yFin = (doc as any).lastAutoTable.finalY + 4;
+//     doc.setFont('helvetica', 'normal').setFontSize(7).setTextColor(120, 120, 120);
+//     doc.text(
+//       `${conEv} ítem(s) con evidencia de ${totalItems} totales` +
+//       (totalItems - conEv > 0 ? ` · ${totalItems - conEv} sin evidencia omitidos` : '') + '.',
+//       mg, yFin
+//     );
+//     doc.setTextColor(0, 0, 0);
+//   }
+
+//   aplicarMarcaDeAgua();
+//   doc.save(`${folio}.pdf`);
+//   return doc.output('datauristring');
+// }
 
 
 
