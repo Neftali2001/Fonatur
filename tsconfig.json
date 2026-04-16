@@ -1,7 +1,10 @@
 {
   "compilerOptions": {
-    "target": "ES2017",
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -13,24 +16,34 @@
     "isolatedModules": true,
     "jsx": "react-jsx",
     "incremental": true,
+    // ── FIX: silencia el warning de baseUrl deprecado en TS 5.x/6.x ──
+    "ignoreDeprecations": "5.0",
     "plugins": [
       {
         "name": "next"
       }
     ],
-    "baseUrl": ".",
     "paths": {
-      "@/*": ["./*"]
-    }
+      "@/*": [
+        "./*"
+      ]
+    },
+    // ── Incluir la declaración de CSS para side-effect imports ────────
+    "typeRoots": [
+      "./node_modules/@types",
+      "./app/types"
+    ],
+    "target": "ES2017"
   },
   "include": [
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",
-    "app/lib/placeholder-data.ts",
-    "scripts/seed.js",
+    "app/types/**/*.d.ts",
     ".next/dev/types/**/*.ts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules"
+  ]
 }
