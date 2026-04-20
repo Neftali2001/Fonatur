@@ -135,7 +135,7 @@ export async function generarPDFCombinado(lista: QueuedForm[]): Promise<string> 
   if (lista.length > 1) {
     let y = 30;
     doc.setFont('helvetica', 'bold').setFontSize(15);
-    doc.text('REPORTE COMBINADO – CIP ACAPULCO-COYUCA', mg, y); y += 8;
+    doc.text('REPORTE INDICE – CIP ACAPULCO-COYUCA', mg, y); y += 8;
     doc.setFont('helvetica', 'normal').setFontSize(10);
     doc.text(`Folio: ${folio}`, mg, y); y += 4;
     doc.setLineWidth(0.5).line(mg, y, pageW - mg, y); y += 8;
