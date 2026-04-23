@@ -1,31 +1,37 @@
-import { sql } from '@vercel/postgres';
-import { FaTrash, FaEdit, FaMapMarkerAlt, FaSearch, FaFilePdf } from 'react-icons/fa';
+// app/dashboard/Historial/page.tsx
+
+import { sql }         from '@vercel/postgres';
+import {
+  FaTrash, FaEdit, FaMapMarkerAlt, FaSearch, FaFilePdf,
+} from 'react-icons/fa';
 import { eliminarReporte, obtenerFechasConConteo } from '@/app/lib/actions';
-import Link from 'next/link';
-import BotonActualizar from '@/app/dashboard/Historial/BotonActualizar';
-import VisorPDF from '@/app/dashboard/Historial/VisorPDF';
-import BorrarPorFecha from '@/app/dashboard/Historial/BorrarPorFecha';
+import Link             from 'next/link';
+import BotonActualizar  from '@/app/dashboard/Historial/BotonActualizar';
+import VisorPDF         from '@/app/dashboard/Historial/VisorPDF';
+import BorrarPorFecha   from '@/app/dashboard/Historial/BorrarPorFecha';
+import GenerarPDFLote   from '@/app/dashboard/Historial/GenerarPDFLote';
 
 // ── Interfaces ─────────────────────────────────────────────────────────────
 interface ReporteAlumbrado {
-  id: string;
-  folio: string;
-  fecha: string;
+  id:                 string;
+  folio:              string;
+  fecha:              string;
   tipo_mantenimiento: string | null;
-  sector: string;
-  tramo: string;
-  latitud: string | null;
-  longitud: string | null;
-  categoria: string;
-  pdf_base64: string | null;
+  sector:             string;
+  tramo:              string;
+  latitud:            string | null;
+  longitud:           string | null;
+  categoria:          string;
+  pdf_base64:         string | null;
 }
 
 interface HistorialPageProps {
   searchParams: Promise<{
-    query?: string;
-    sort?: string;
-    page?: string;
+    query?:         string;
+    sort?:          string;
+    page?:          string;
     mantenimiento?: string;
+    sector?:        string;   // ← NUEVO: filtro de ubicación
   }>;
 }
 
@@ -54,26 +60,35 @@ const formatearFecha = (fechaString: string) => {
   } catch { return 'Error en fecha'; }
 };
 
-// ── Componente ─────────────────────────────────────────────────────────────
+// ── Página ─────────────────────────────────────────────────────────────────
 export default async function HistorialPage({ searchParams }: HistorialPageProps) {
-  const resolvedSearchParams = await searchParams;
+  const p = await searchParams;
 
-  const query         = resolvedSearchParams?.query         || '';
-  const sort          = resolvedSearchParams?.sort          || 'desc';
-  const mantenimiento = resolvedSearchParams?.mantenimiento || '';
-  const paginaActual  = Number(resolvedSearchParams?.page)  || 1;
+  const query         = p?.query         || '';
+  const sort          = p?.sort          || 'desc';
+  const mantenimiento = p?.mantenimiento || '';
+  const sectorFiltro  = p?.sector        || '';
+  const paginaActual  = Number(p?.page)  || 1;
   const offset        = (paginaActual - 1) * ITEMS_POR_PAGINA;
-  const searchPattern = `%${query}%`;
 
-  // Cargar reportes + conteo + fechas en paralelo
-  const [conteoResult, result, fechasConConteo] = await Promise.all([
+  const searchPattern = `%${query}%`;
+  // Para el filtro de sector usamos ILIKE si hay valor, o '%' para traer todo
+  const sectorPattern = sectorFiltro ? `%${sectorFiltro}%` : '%';
+
+  // ── Queries en paralelo ────────────────────────────────────────────────
+  const [conteoResult, result, sectoresResult, fechasConConteo, todosIdsResult] = await Promise.all([
+
+    // Total para paginación
     sql`
       SELECT COUNT(*) FROM reportes_alumbrado
       WHERE (folio  ILIKE ${searchPattern}
           OR sector ILIKE ${searchPattern}
           OR tramo  ILIKE ${searchPattern})
         AND (${mantenimiento} = '' OR tipo_mantenimiento = ${mantenimiento})
+        AND sector ILIKE ${sectorPattern}
     `,
+
+    // Página actual (solo para mostrar en la tabla)
     sql<ReporteAlumbrado>`
       SELECT id, folio, fecha, tipo_mantenimiento, sector, tramo,
              latitud, longitud, categoria, pdf_base64
@@ -82,68 +97,202 @@ export default async function HistorialPage({ searchParams }: HistorialPageProps
           OR sector ILIKE ${searchPattern}
           OR tramo  ILIKE ${searchPattern})
         AND (${mantenimiento} = '' OR tipo_mantenimiento = ${mantenimiento})
+        AND sector ILIKE ${sectorPattern}
       ORDER BY
         CASE WHEN ${sort} = 'asc'  THEN fecha END ASC,
         CASE WHEN ${sort} = 'desc' THEN fecha END DESC
       LIMIT ${ITEMS_POR_PAGINA} OFFSET ${offset}
     `,
+
+    // Sectores únicos → dropdown de Ubicación
+    sql`
+      SELECT DISTINCT sector
+      FROM reportes_alumbrado
+      WHERE sector IS NOT NULL AND sector <> ''
+      ORDER BY sector ASC
+    `,
+
     obtenerFechasConConteo(),
+
+    // ── TODOS los IDs filtrados (sin LIMIT) → para el PDF combinado completo ──
+    // Solo se ejecuta si hay algún filtro activo para evitar traer miles de IDs sin motivo
+    (query || mantenimiento || sectorFiltro)
+      ? sql`
+          SELECT id FROM reportes_alumbrado
+          WHERE (folio  ILIKE ${searchPattern}
+              OR sector ILIKE ${searchPattern}
+              OR tramo  ILIKE ${searchPattern})
+            AND (${mantenimiento} = '' OR tipo_mantenimiento = ${mantenimiento})
+            AND sector ILIKE ${sectorPattern}
+          ORDER BY
+            CASE WHEN ${sort} = 'asc'  THEN fecha END ASC,
+            CASE WHEN ${sort} = 'desc' THEN fecha END DESC
+        `
+      : Promise.resolve({ rows: [] as { id: string }[] }),
   ]);
 
-  const totalRegistros = Number(conteoResult.rows[0].count);
-  const totalPaginas   = Math.ceil(totalRegistros / ITEMS_POR_PAGINA);
-  const reportes       = result.rows;
+  const totalRegistros      = Number(conteoResult.rows[0].count);
+  const totalPaginas        = Math.ceil(totalRegistros / ITEMS_POR_PAGINA);
+  const reportes            = result.rows;
+  const sectores            = sectoresResult.rows.map(r => r.sector as string);
+
+  // Todos los IDs que coinciden con el filtro (para el PDF completo)
+  const todosFiltradosIds   = todosIdsResult.rows.map((r: any) => r.id.toString());
+
+  // Query string que preserva los filtros al paginar
+  const qs = new URLSearchParams({
+    ...(query         ? { query }         : {}),
+    ...(sort !== 'desc' ? { sort }        : {}),
+    ...(mantenimiento ? { mantenimiento } : {}),
+    ...(sectorFiltro  ? { sector: sectorFiltro } : {}),
+  }).toString();
+
+  const hayFiltros = !!(query || mantenimiento || sectorFiltro);
 
   return (
-    <main className="p-4 md:p-6 max-w-7xl mx-auto space-y-6">
+    <main className="p-4 md:p-6 max-w-7xl mx-auto space-y-5">
 
-      {/* ── FILTROS ── */}
-      <form method="GET" className="bg-white p-4 md:p-6 rounded-xl shadow-md border border-gray-100 flex flex-col lg:flex-row gap-4 items-end">
-        <div className="w-full flex-1">
-          <label className="text-[11px] uppercase font-bold text-slate-500 mb-1.5 block ml-1">Búsqueda General</label>
-          <div className="relative">
-            <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input type="text" name="query" defaultValue={query}
-              placeholder="Folio, sector o tramo..."
-              className="w-full pl-10 pr-4 py-3 md:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none transition text-sm md:text-base" />
+      {/* ════════════════════════════════════════
+          FILTROS
+      ════════════════════════════════════════ */}
+      <form method="GET"
+        className="bg-white p-4 md:p-5 rounded-xl shadow-md border border-gray-100">
+
+        <div className="flex flex-col lg:flex-row gap-3 items-end flex-wrap">
+
+          {/* Búsqueda */}
+          <div className="w-full flex-1 min-w-[180px]">
+            <label className="text-[10px] uppercase font-bold text-slate-500 mb-1.5 block ml-1">
+              Búsqueda
+            </label>
+            <div className="relative">
+              <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={12} />
+              <input type="text" name="query" defaultValue={query}
+                placeholder="Folio, sector o tramo…"
+                className="w-full pl-9 pr-4 py-2.5 md:py-2 border border-gray-200 rounded-lg
+                           focus:ring-2 focus:ring-emerald-500 outline-none text-sm" />
+            </div>
+          </div>
+
+          {/* Ubicación / Sector ← NUEVO */}
+          <div className="w-full lg:w-52">
+            <label className="text-[10px] uppercase font-bold text-slate-500 mb-1.5 block ml-1">
+              Ubicación / Sector
+            </label>
+            <select name="sector" defaultValue={sectorFiltro}
+              className="w-full px-3 py-2.5 md:py-2 border border-gray-200 rounded-lg
+                         focus:ring-2 focus:ring-emerald-500 outline-none bg-white text-sm">
+              <option value="">Todas las ubicaciones</option>
+              {sectores.map(s => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Mantenimiento */}
+          <div className="w-full lg:w-44">
+            <label className="text-[10px] uppercase font-bold text-slate-500 mb-1.5 block ml-1">
+              Mantenimiento
+            </label>
+            <select name="mantenimiento" defaultValue={mantenimiento}
+              className="w-full px-3 py-2.5 md:py-2 border border-gray-200 rounded-lg
+                         focus:ring-2 focus:ring-emerald-500 outline-none bg-white text-sm">
+              <option value="">Todos</option>
+              <option value="Urgente">🚨 Urgente</option>
+              <option value="Ordinario">📋 Ordinario</option>
+              <option value="Programable">🗓️ Programable</option>
+            </select>
+          </div>
+
+          {/* Orden */}
+          <div className="w-full lg:w-36">
+            <label className="text-[10px] uppercase font-bold text-slate-500 mb-1.5 block ml-1">
+              Orden
+            </label>
+            <select name="sort" defaultValue={sort}
+              className="w-full px-3 py-2.5 md:py-2 border border-gray-200 rounded-lg
+                         focus:ring-2 focus:ring-emerald-500 outline-none bg-white text-sm">
+              <option value="desc">Recientes</option>
+              <option value="asc">Antiguos</option>
+            </select>
+          </div>
+
+          {/* Botones */}
+          <div className="flex gap-2 w-full lg:w-auto">
+            <button type="submit"
+              className="flex-1 lg:flex-none px-6 py-2.5 md:py-2 bg-emerald-600
+                         hover:bg-emerald-700 text-white font-semibold rounded-lg
+                         transition-all shadow-sm text-sm">
+              Aplicar
+            </button>
+            {hayFiltros && (
+              <a href="/dashboard/Historial"
+                className="flex-1 lg:flex-none text-center px-4 py-2.5 md:py-2 border
+                           border-gray-200 text-gray-600 hover:bg-gray-50 rounded-lg
+                           text-sm font-semibold transition-colors">
+                Limpiar
+              </a>
+            )}
+            <BotonActualizar />
           </div>
         </div>
 
-        <div className="w-full lg:w-48">
-          <label className="text-[11px] uppercase font-bold text-slate-500 mb-1.5 block ml-1">Mantenimiento</label>
-          <select name="mantenimiento" defaultValue={mantenimiento}
-            className="w-full px-3 py-3 md:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white text-sm md:text-base">
-            <option value="">Todos los registros</option>
-            <option value="Urgente">🚨 Urgente</option>
-            <option value="Ordinario">📋 Ordinario</option>
-            <option value="Programable">🗓️ Programable</option>
-          </select>
-        </div>
-
-        <div className="w-full lg:w-40">
-          <label className="text-[11px] uppercase font-bold text-slate-500 mb-1.5 block ml-1">Orden</label>
-          <select name="sort" defaultValue={sort}
-            className="w-full px-3 py-3 md:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white text-sm md:text-base">
-            <option value="desc">Recientes</option>
-            <option value="asc">Antiguos</option>
-          </select>
-        </div>
-
-        <button type="submit"
-          className="w-full lg:w-auto px-8 py-3 md:py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg transition-all shadow-lg shadow-emerald-200 mt-2 lg:mt-0">
-          Aplicar
-        </button>
-        <BotonActualizar />
+        {/* Badges de filtros activos */}
+        {hayFiltros && (
+          <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-gray-100">
+            <span className="text-xs text-slate-500 mr-1">
+              {totalRegistros} resultado{totalRegistros !== 1 ? 's' : ''}
+            </span>
+            {sectorFiltro  && <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-[11px] font-semibold">📍 {sectorFiltro}</span>}
+            {mantenimiento && <span className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-full text-[11px] font-semibold">🔧 {mantenimiento}</span>}
+            {query         && <span className="px-2 py-0.5 bg-slate-50 text-slate-600 border border-slate-200 rounded-full text-[11px] font-semibold">🔍 "{query}"</span>}
+          </div>
+        )}
       </form>
 
-      {/* ── BORRAR POR FECHA ── */}
+      {/* ════════════════════════════════════════
+          PDF LOTE — solo si hay filtros activos
+      ════════════════════════════════════════ */}
+      {hayFiltros && todosFiltradosIds.length > 0 && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-5 py-4
+                        flex flex-col sm:flex-row items-start sm:items-center
+                        justify-between gap-4">
+          <div>
+            <p className="text-sm font-bold text-emerald-800">
+              Generar PDF combinado con los reportes filtrados
+            </p>
+            <p className="text-[11px] text-emerald-600 mt-0.5">
+              {todosFiltradosIds.length} reporte{todosFiltradosIds.length !== 1 ? 's' : ''} incluidos en el PDF
+            </p>
+          </div>
+          <GenerarPDFLote
+            ids={todosFiltradosIds}
+            totalCount={todosFiltradosIds.length}
+            titulo={[
+              'REPORTE CIP ACAPULCO-COYUCA',
+              sectorFiltro  ? `SECTOR: ${sectorFiltro}`   : '',
+              mantenimiento ? `TIPO: ${mantenimiento}`     : '',
+              query         ? `BÚSQUEDA: "${query}"`       : '',
+            ].filter(Boolean).join(' · ')}
+          />
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════
+          BORRAR POR FECHA
+      ════════════════════════════════════════ */}
       <BorrarPorFecha fechas={fechasConConteo} />
 
-      {/* ── LISTA DE REPORTES ── */}
-      <div className="bg-transparent md:bg-white rounded-none md:rounded-xl md:shadow-lg md:border md:border-gray-200 flex flex-col gap-4 md:gap-0">
+      {/* ════════════════════════════════════════
+          LISTA DE REPORTES
+      ════════════════════════════════════════ */}
+      <div className="bg-transparent md:bg-white rounded-none md:rounded-xl md:shadow-lg
+                      md:border md:border-gray-200 flex flex-col gap-4 md:gap-0">
 
-        {/* Cabecera de tabla (desktop) */}
-        <div className="hidden md:grid md:grid-cols-[1.5fr_1fr_2fr_1fr_0.5fr_0.5fr_1fr] gap-4 px-6 py-4 bg-slate-800 text-white uppercase text-[11px] tracking-wider rounded-t-xl">
+        {/* Cabecera desktop */}
+        <div className="hidden md:grid md:grid-cols-[1.5fr_1fr_2fr_1fr_0.5fr_0.5fr_1fr]
+                        gap-4 px-6 py-4 bg-slate-800 text-white uppercase text-[11px]
+                        tracking-wider rounded-t-xl">
           <div>Folio / Fecha</div>
           <div className="text-center">Tipo</div>
           <div>Ubicación</div>
@@ -154,31 +303,37 @@ export default async function HistorialPage({ searchParams }: HistorialPageProps
         </div>
 
         <div className="flex flex-col gap-4 md:gap-0">
-          {reportes.map((reporte) => {
+          {reportes.map(reporte => {
             const eliminarBind = eliminarReporte.bind(null, reporte.id.toString());
             const badgeClass   = getBadgeStyle(reporte.tipo_mantenimiento);
             const fechaStr     = formatearFecha(reporte.fecha);
-
             const catColors: Record<string, string> = {
               'ALUMBRADO PÚBLICO':  'bg-yellow-100 text-yellow-700 border-yellow-200',
               'AREAS VERDES':       'bg-emerald-100 text-emerald-700 border-emerald-200',
               'BARRIDO VIALIDADES': 'bg-blue-100 text-blue-700 border-blue-200',
               'LIMPIEZA URBANA':    'bg-orange-100 text-orange-700 border-orange-200',
+              'MOBILIARIO URBANO':  'bg-purple-100 text-purple-700 border-purple-200',
             };
             const catStyle = catColors[reporte.categoria] ?? 'bg-gray-100 text-gray-600 border-gray-200';
 
             return (
               <div key={reporte.id}
-                className="bg-white rounded-xl shadow-md border border-gray-200 p-4 md:p-0 md:rounded-none md:shadow-none md:border-x-0 md:border-t-0 md:border-b md:border-gray-100 md:grid md:grid-cols-[1.5fr_1fr_2fr_1fr_0.5fr_0.5fr_1fr] md:gap-4 md:items-center hover:bg-emerald-50/30 transition-colors group relative overflow-hidden">
+                className="bg-white rounded-xl shadow-md border border-gray-200 p-4
+                           md:p-0 md:rounded-none md:shadow-none md:border-x-0 md:border-t-0
+                           md:border-b md:border-gray-100
+                           md:grid md:grid-cols-[1.5fr_1fr_2fr_1fr_0.5fr_0.5fr_1fr]
+                           md:gap-4 md:items-center
+                           hover:bg-emerald-50/30 transition-colors group relative overflow-hidden">
 
-                {/* Folio y Fecha */}
-                <div className="flex justify-between items-start md:px-6 md:py-4 mb-3 md:mb-0 border-b border-gray-100 md:border-none pb-3 md:pb-0">
+                {/* Folio + Fecha */}
+                <div className="flex justify-between items-start md:px-6 md:py-4 mb-3 md:mb-0
+                                border-b border-gray-100 md:border-none pb-3 md:pb-0">
                   <div>
-                    <div className="font-bold text-slate-800 text-base mb-0.5">{reporte.folio}</div>
+                    <div className="font-bold text-slate-800 text-sm mb-0.5">{reporte.folio}</div>
                     <div className="text-xs text-slate-400">{fechaStr}</div>
                   </div>
                   <div className="md:hidden">
-                    <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase border ${badgeClass}`}>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${badgeClass}`}>
                       {reporte.tipo_mantenimiento || 'N/A'}
                     </span>
                   </div>
@@ -186,7 +341,7 @@ export default async function HistorialPage({ searchParams }: HistorialPageProps
 
                 {/* Tipo (desktop) */}
                 <div className="hidden md:block md:px-6 md:py-4 text-center">
-                  <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase border ${badgeClass}`}>
+                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase border ${badgeClass}`}>
                     {reporte.tipo_mantenimiento || 'N/A'}
                   </span>
                 </div>
@@ -198,7 +353,7 @@ export default async function HistorialPage({ searchParams }: HistorialPageProps
                   <div className="text-xs text-slate-500">{reporte.tramo}</div>
                 </div>
 
-                {/* Categoría (desktop) */}
+                {/* Categoría */}
                 <div className="hidden md:flex md:px-6 md:py-4 items-center justify-center">
                   <span className={`px-2 py-1 rounded-full text-[9px] font-bold uppercase border text-center leading-tight ${catStyle}`}>
                     {reporte.categoria}
@@ -206,7 +361,9 @@ export default async function HistorialPage({ searchParams }: HistorialPageProps
                 </div>
 
                 {/* GPS + PDF + Acciones */}
-                <div className="flex justify-between items-center bg-gray-50 md:bg-transparent -mx-4 -mb-4 p-4 md:m-0 md:p-0 md:contents rounded-b-xl md:rounded-none border-t border-gray-100 md:border-none">
+                <div className="flex justify-between items-center bg-gray-50 md:bg-transparent
+                                -mx-4 -mb-4 p-4 md:m-0 md:p-0 md:contents
+                                rounded-b-xl md:rounded-none border-t border-gray-100 md:border-none">
 
                   {/* GPS */}
                   <div className="md:px-6 md:py-4 md:text-center flex items-center gap-2">
@@ -214,7 +371,9 @@ export default async function HistorialPage({ searchParams }: HistorialPageProps
                     {reporte.latitud ? (
                       <a href={`https://www.google.com/maps?q=${reporte.latitud},${reporte.longitud}`}
                         target="_blank" rel="noreferrer"
-                        className="inline-flex items-center justify-center w-9 h-9 md:w-10 md:h-10 rounded-full bg-emerald-100 text-emerald-600 hover:bg-emerald-600 hover:text-white transition-all shadow-sm">
+                        className="inline-flex items-center justify-center w-9 h-9 md:w-10 md:h-10
+                                   rounded-full bg-emerald-100 text-emerald-600
+                                   hover:bg-emerald-600 hover:text-white transition-all shadow-sm">
                         <FaMapMarkerAlt size={14} />
                       </a>
                     ) : (
@@ -222,12 +381,13 @@ export default async function HistorialPage({ searchParams }: HistorialPageProps
                     )}
                   </div>
 
-                  {/* PDF */}
+                  {/* PDF individual */}
                   <div className="md:px-3 md:py-4 md:text-center flex items-center justify-center">
                     {reporte.pdf_base64 ? (
                       <VisorPDF pdfBase64={reporte.pdf_base64} folio={reporte.folio} />
                     ) : (
-                      <span className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-gray-100 text-gray-300"
+                      <span className="inline-flex items-center justify-center w-9 h-9
+                                       rounded-full bg-gray-100 text-gray-300"
                         title="Sin PDF guardado">
                         <FaFilePdf size={14} />
                       </span>
@@ -235,17 +395,18 @@ export default async function HistorialPage({ searchParams }: HistorialPageProps
                   </div>
 
                   {/* Acciones */}
-                  <div className="flex gap-3 justify-end md:px-6 md:py-4 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                  <div className="flex gap-3 justify-end md:px-6 md:py-4
+                                  opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                     <Link href={`/dashboard/PineoA?editId=${reporte.id}`}
                       className="p-2 md:p-2.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
                       title="Editar">
-                      <FaEdit size={16} />
+                      <FaEdit size={15} />
                     </Link>
                     <form action={eliminarBind}>
                       <button type="submit"
                         className="p-2 md:p-2.5 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
                         title="Eliminar">
-                        <FaTrash size={16} />
+                        <FaTrash size={15} />
                       </button>
                     </form>
                   </div>
@@ -257,24 +418,31 @@ export default async function HistorialPage({ searchParams }: HistorialPageProps
 
         {/* Estado vacío */}
         {reportes.length === 0 && (
-          <div className="py-20 text-center flex flex-col items-center bg-white md:bg-transparent rounded-xl shadow-sm border border-gray-200 md:border-none">
-            <FaSearch size={30} className="text-slate-300 mb-4" />
+          <div className="py-20 text-center flex flex-col items-center bg-white md:bg-transparent
+                          rounded-xl shadow-sm border border-gray-200 md:border-none">
+            <FaSearch size={28} className="text-slate-300 mb-4" />
             <p className="text-slate-500 font-medium px-4">No se encontraron reportes.</p>
-            <Link href="/dashboard/Historial" className="text-emerald-600 text-sm mt-2 underline">Limpiar filtros</Link>
+            <Link href="/dashboard/Historial"
+              className="text-emerald-600 text-sm mt-2 underline">
+              Limpiar filtros
+            </Link>
           </div>
         )}
 
         {/* Paginación */}
         {totalPaginas > 1 && (
-          <div className="px-4 md:px-6 py-4 bg-slate-50 flex flex-col sm:flex-row items-center justify-between gap-4 mt-4 md:mt-0 rounded-xl md:rounded-b-xl border border-gray-200 md:border-none">
+          <div className="px-4 md:px-6 py-4 bg-slate-50 flex flex-col sm:flex-row
+                          items-center justify-between gap-4 mt-4 md:mt-0
+                          rounded-xl md:rounded-b-xl border border-gray-200 md:border-none">
             <p className="text-sm text-slate-500">
               Página {paginaActual} de {totalPaginas}
               <span className="ml-2 text-slate-400">({totalRegistros} reportes)</span>
             </p>
             <div className="flex gap-2 w-full sm:w-auto">
               <Link
-                href={`?query=${query}&sort=${sort}&mantenimiento=${mantenimiento}&page=${paginaActual - 1}`}
-                className={`flex-1 sm:flex-none text-center px-4 py-2.5 rounded-lg text-sm font-semibold transition ${
+                href={`?${qs}&page=${paginaActual - 1}`}
+                className={`flex-1 sm:flex-none text-center px-4 py-2.5 rounded-lg
+                            text-sm font-semibold transition ${
                   paginaActual <= 1
                     ? 'bg-gray-200 text-gray-400 pointer-events-none'
                     : 'bg-white border text-slate-700 hover:bg-gray-100 shadow-sm'
@@ -282,8 +450,9 @@ export default async function HistorialPage({ searchParams }: HistorialPageProps
                 Anterior
               </Link>
               <Link
-                href={`?query=${query}&sort=${sort}&mantenimiento=${mantenimiento}&page=${paginaActual + 1}`}
-                className={`flex-1 sm:flex-none text-center px-4 py-2.5 rounded-lg text-sm font-semibold transition ${
+                href={`?${qs}&page=${paginaActual + 1}`}
+                className={`flex-1 sm:flex-none text-center px-4 py-2.5 rounded-lg
+                            text-sm font-semibold transition ${
                   paginaActual >= totalPaginas
                     ? 'bg-gray-200 text-gray-400 pointer-events-none'
                     : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-md'
@@ -297,6 +466,331 @@ export default async function HistorialPage({ searchParams }: HistorialPageProps
     </main>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// import { sql } from '@vercel/postgres';
+// import { FaTrash, FaEdit, FaMapMarkerAlt, FaSearch, FaFilePdf } from 'react-icons/fa';
+// import { eliminarReporte, obtenerFechasConConteo } from '@/app/lib/actions';
+// import Link from 'next/link';
+// import BotonActualizar from '@/app/dashboard/Historial/BotonActualizar';
+// import VisorPDF from '@/app/dashboard/Historial/VisorPDF';
+// import BorrarPorFecha from '@/app/dashboard/Historial/BorrarPorFecha';
+
+// // ── Interfaces ─────────────────────────────────────────────────────────────
+// interface ReporteAlumbrado {
+//   id: string;
+//   folio: string;
+//   fecha: string;
+//   tipo_mantenimiento: string | null;
+//   sector: string;
+//   tramo: string;
+//   latitud: string | null;
+//   longitud: string | null;
+//   categoria: string;
+//   pdf_base64: string | null;
+// }
+
+// interface HistorialPageProps {
+//   searchParams: Promise<{
+//     query?: string;
+//     sort?: string;
+//     page?: string;
+//     mantenimiento?: string;
+//   }>;
+// }
+
+// const ITEMS_POR_PAGINA = 10;
+
+// // ── Helpers ────────────────────────────────────────────────────────────────
+// const getBadgeStyle = (tipo: string | null) => {
+//   if (!tipo) return 'bg-gray-50 text-gray-400 border-gray-100 italic';
+//   switch (tipo.toLowerCase()) {
+//     case 'urgente':     return 'bg-red-100   text-red-700   border-red-200';
+//     case 'ordinario':   return 'bg-blue-100  text-blue-700  border-blue-200';
+//     case 'programable': return 'bg-amber-100 text-amber-700 border-amber-200';
+//     default:            return 'bg-gray-100  text-gray-600  border-gray-200';
+//   }
+// };
+
+// const formatearFecha = (fechaString: string) => {
+//   try {
+//     const d = new Date(fechaString);
+//     if (isNaN(d.getTime())) return 'Fecha no válida';
+//     return d.toLocaleString('es-MX', {
+//       timeZone: 'America/Mexico_City',
+//       day: '2-digit', month: '2-digit', year: 'numeric',
+//       hour: '2-digit', minute: '2-digit', hour12: true,
+//     });
+//   } catch { return 'Error en fecha'; }
+// };
+
+// // ── Componente ─────────────────────────────────────────────────────────────
+// export default async function HistorialPage({ searchParams }: HistorialPageProps) {
+//   const resolvedSearchParams = await searchParams;
+
+//   const query         = resolvedSearchParams?.query         || '';
+//   const sort          = resolvedSearchParams?.sort          || 'desc';
+//   const mantenimiento = resolvedSearchParams?.mantenimiento || '';
+//   const paginaActual  = Number(resolvedSearchParams?.page)  || 1;
+//   const offset        = (paginaActual - 1) * ITEMS_POR_PAGINA;
+//   const searchPattern = `%${query}%`;
+
+//   // Cargar reportes + conteo + fechas en paralelo
+//   const [conteoResult, result, fechasConConteo] = await Promise.all([
+//     sql`
+//       SELECT COUNT(*) FROM reportes_alumbrado
+//       WHERE (folio  ILIKE ${searchPattern}
+//           OR sector ILIKE ${searchPattern}
+//           OR tramo  ILIKE ${searchPattern})
+//         AND (${mantenimiento} = '' OR tipo_mantenimiento = ${mantenimiento})
+//     `,
+//     sql<ReporteAlumbrado>`
+//       SELECT id, folio, fecha, tipo_mantenimiento, sector, tramo,
+//              latitud, longitud, categoria, pdf_base64
+//       FROM reportes_alumbrado
+//       WHERE (folio  ILIKE ${searchPattern}
+//           OR sector ILIKE ${searchPattern}
+//           OR tramo  ILIKE ${searchPattern})
+//         AND (${mantenimiento} = '' OR tipo_mantenimiento = ${mantenimiento})
+//       ORDER BY
+//         CASE WHEN ${sort} = 'asc'  THEN fecha END ASC,
+//         CASE WHEN ${sort} = 'desc' THEN fecha END DESC
+//       LIMIT ${ITEMS_POR_PAGINA} OFFSET ${offset}
+//     `,
+//     obtenerFechasConConteo(),
+//   ]);
+
+//   const totalRegistros = Number(conteoResult.rows[0].count);
+//   const totalPaginas   = Math.ceil(totalRegistros / ITEMS_POR_PAGINA);
+//   const reportes       = result.rows;
+
+//   return (
+//     <main className="p-4 md:p-6 max-w-7xl mx-auto space-y-6">
+
+//       {/* ── FILTROS ── */}
+//       <form method="GET" className="bg-white p-4 md:p-6 rounded-xl shadow-md border border-gray-100 flex flex-col lg:flex-row gap-4 items-end">
+//         <div className="w-full flex-1">
+//           <label className="text-[11px] uppercase font-bold text-slate-500 mb-1.5 block ml-1">Búsqueda General</label>
+//           <div className="relative">
+//             <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+//             <input type="text" name="query" defaultValue={query}
+//               placeholder="Folio, sector o tramo..."
+//               className="w-full pl-10 pr-4 py-3 md:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none transition text-sm md:text-base" />
+//           </div>
+//         </div>
+
+//         <div className="w-full lg:w-48">
+//           <label className="text-[11px] uppercase font-bold text-slate-500 mb-1.5 block ml-1">Mantenimiento</label>
+//           <select name="mantenimiento" defaultValue={mantenimiento}
+//             className="w-full px-3 py-3 md:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white text-sm md:text-base">
+//             <option value="">Todos los registros</option>
+//             <option value="Urgente">🚨 Urgente</option>
+//             <option value="Ordinario">📋 Ordinario</option>
+//             <option value="Programable">🗓️ Programable</option>
+//           </select>
+//         </div>
+
+//         <div className="w-full lg:w-40">
+//           <label className="text-[11px] uppercase font-bold text-slate-500 mb-1.5 block ml-1">Orden</label>
+//           <select name="sort" defaultValue={sort}
+//             className="w-full px-3 py-3 md:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white text-sm md:text-base">
+//             <option value="desc">Recientes</option>
+//             <option value="asc">Antiguos</option>
+//           </select>
+//         </div>
+
+//         <button type="submit"
+//           className="w-full lg:w-auto px-8 py-3 md:py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg transition-all shadow-lg shadow-emerald-200 mt-2 lg:mt-0">
+//           Aplicar
+//         </button>
+//         <BotonActualizar />
+//       </form>
+
+//       {/* ── BORRAR POR FECHA ── */}
+//       <BorrarPorFecha fechas={fechasConConteo} />
+
+//       {/* ── LISTA DE REPORTES ── */}
+//       <div className="bg-transparent md:bg-white rounded-none md:rounded-xl md:shadow-lg md:border md:border-gray-200 flex flex-col gap-4 md:gap-0">
+
+//         {/* Cabecera de tabla (desktop) */}
+//         <div className="hidden md:grid md:grid-cols-[1.5fr_1fr_2fr_1fr_0.5fr_0.5fr_1fr] gap-4 px-6 py-4 bg-slate-800 text-white uppercase text-[11px] tracking-wider rounded-t-xl">
+//           <div>Folio / Fecha</div>
+//           <div className="text-center">Tipo</div>
+//           <div>Ubicación</div>
+//           <div className="text-center">Categoría</div>
+//           <div className="text-center">GPS</div>
+//           <div className="text-center">PDF</div>
+//           <div className="text-right">Acciones</div>
+//         </div>
+
+//         <div className="flex flex-col gap-4 md:gap-0">
+//           {reportes.map((reporte) => {
+//             const eliminarBind = eliminarReporte.bind(null, reporte.id.toString());
+//             const badgeClass   = getBadgeStyle(reporte.tipo_mantenimiento);
+//             const fechaStr     = formatearFecha(reporte.fecha);
+
+//             const catColors: Record<string, string> = {
+//               'ALUMBRADO PÚBLICO':  'bg-yellow-100 text-yellow-700 border-yellow-200',
+//               'AREAS VERDES':       'bg-emerald-100 text-emerald-700 border-emerald-200',
+//               'BARRIDO VIALIDADES': 'bg-blue-100 text-blue-700 border-blue-200',
+//               'LIMPIEZA URBANA':    'bg-orange-100 text-orange-700 border-orange-200',
+//             };
+//             const catStyle = catColors[reporte.categoria] ?? 'bg-gray-100 text-gray-600 border-gray-200';
+
+//             return (
+//               <div key={reporte.id}
+//                 className="bg-white rounded-xl shadow-md border border-gray-200 p-4 md:p-0 md:rounded-none md:shadow-none md:border-x-0 md:border-t-0 md:border-b md:border-gray-100 md:grid md:grid-cols-[1.5fr_1fr_2fr_1fr_0.5fr_0.5fr_1fr] md:gap-4 md:items-center hover:bg-emerald-50/30 transition-colors group relative overflow-hidden">
+
+//                 {/* Folio y Fecha */}
+//                 <div className="flex justify-between items-start md:px-6 md:py-4 mb-3 md:mb-0 border-b border-gray-100 md:border-none pb-3 md:pb-0">
+//                   <div>
+//                     <div className="font-bold text-slate-800 text-base mb-0.5">{reporte.folio}</div>
+//                     <div className="text-xs text-slate-400">{fechaStr}</div>
+//                   </div>
+//                   <div className="md:hidden">
+//                     <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase border ${badgeClass}`}>
+//                       {reporte.tipo_mantenimiento || 'N/A'}
+//                     </span>
+//                   </div>
+//                 </div>
+
+//                 {/* Tipo (desktop) */}
+//                 <div className="hidden md:block md:px-6 md:py-4 text-center">
+//                   <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase border ${badgeClass}`}>
+//                     {reporte.tipo_mantenimiento || 'N/A'}
+//                   </span>
+//                 </div>
+
+//                 {/* Ubicación */}
+//                 <div className="mb-3 md:mb-0 md:px-6 md:py-4">
+//                   <div className="text-[10px] uppercase font-bold text-slate-400 md:hidden mb-1">Sector/Tramo</div>
+//                   <div className="text-slate-700 font-medium text-sm">{reporte.sector}</div>
+//                   <div className="text-xs text-slate-500">{reporte.tramo}</div>
+//                 </div>
+
+//                 {/* Categoría (desktop) */}
+//                 <div className="hidden md:flex md:px-6 md:py-4 items-center justify-center">
+//                   <span className={`px-2 py-1 rounded-full text-[9px] font-bold uppercase border text-center leading-tight ${catStyle}`}>
+//                     {reporte.categoria}
+//                   </span>
+//                 </div>
+
+//                 {/* GPS + PDF + Acciones */}
+//                 <div className="flex justify-between items-center bg-gray-50 md:bg-transparent -mx-4 -mb-4 p-4 md:m-0 md:p-0 md:contents rounded-b-xl md:rounded-none border-t border-gray-100 md:border-none">
+
+//                   {/* GPS */}
+//                   <div className="md:px-6 md:py-4 md:text-center flex items-center gap-2">
+//                     <span className="text-[10px] uppercase font-bold text-slate-400 md:hidden">GPS: </span>
+//                     {reporte.latitud ? (
+//                       <a href={`https://www.google.com/maps?q=${reporte.latitud},${reporte.longitud}`}
+//                         target="_blank" rel="noreferrer"
+//                         className="inline-flex items-center justify-center w-9 h-9 md:w-10 md:h-10 rounded-full bg-emerald-100 text-emerald-600 hover:bg-emerald-600 hover:text-white transition-all shadow-sm">
+//                         <FaMapMarkerAlt size={14} />
+//                       </a>
+//                     ) : (
+//                       <span className="text-gray-400 italic text-xs bg-gray-100 px-2 py-1 rounded-md">Sin GPS</span>
+//                     )}
+//                   </div>
+
+//                   {/* PDF */}
+//                   <div className="md:px-3 md:py-4 md:text-center flex items-center justify-center">
+//                     {reporte.pdf_base64 ? (
+//                       <VisorPDF pdfBase64={reporte.pdf_base64} folio={reporte.folio} />
+//                     ) : (
+//                       <span className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-gray-100 text-gray-300"
+//                         title="Sin PDF guardado">
+//                         <FaFilePdf size={14} />
+//                       </span>
+//                     )}
+//                   </div>
+
+//                   {/* Acciones */}
+//                   <div className="flex gap-3 justify-end md:px-6 md:py-4 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+//                     <Link href={`/dashboard/PineoA?editId=${reporte.id}`}
+//                       className="p-2 md:p-2.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+//                       title="Editar">
+//                       <FaEdit size={16} />
+//                     </Link>
+//                     <form action={eliminarBind}>
+//                       <button type="submit"
+//                         className="p-2 md:p-2.5 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+//                         title="Eliminar">
+//                         <FaTrash size={16} />
+//                       </button>
+//                     </form>
+//                   </div>
+//                 </div>
+//               </div>
+//             );
+//           })}
+//         </div>
+
+//         {/* Estado vacío */}
+//         {reportes.length === 0 && (
+//           <div className="py-20 text-center flex flex-col items-center bg-white md:bg-transparent rounded-xl shadow-sm border border-gray-200 md:border-none">
+//             <FaSearch size={30} className="text-slate-300 mb-4" />
+//             <p className="text-slate-500 font-medium px-4">No se encontraron reportes.</p>
+//             <Link href="/dashboard/Historial" className="text-emerald-600 text-sm mt-2 underline">Limpiar filtros</Link>
+//           </div>
+//         )}
+
+//         {/* Paginación */}
+//         {totalPaginas > 1 && (
+//           <div className="px-4 md:px-6 py-4 bg-slate-50 flex flex-col sm:flex-row items-center justify-between gap-4 mt-4 md:mt-0 rounded-xl md:rounded-b-xl border border-gray-200 md:border-none">
+//             <p className="text-sm text-slate-500">
+//               Página {paginaActual} de {totalPaginas}
+//               <span className="ml-2 text-slate-400">({totalRegistros} reportes)</span>
+//             </p>
+//             <div className="flex gap-2 w-full sm:w-auto">
+//               <Link
+//                 href={`?query=${query}&sort=${sort}&mantenimiento=${mantenimiento}&page=${paginaActual - 1}`}
+//                 className={`flex-1 sm:flex-none text-center px-4 py-2.5 rounded-lg text-sm font-semibold transition ${
+//                   paginaActual <= 1
+//                     ? 'bg-gray-200 text-gray-400 pointer-events-none'
+//                     : 'bg-white border text-slate-700 hover:bg-gray-100 shadow-sm'
+//                 }`}>
+//                 Anterior
+//               </Link>
+//               <Link
+//                 href={`?query=${query}&sort=${sort}&mantenimiento=${mantenimiento}&page=${paginaActual + 1}`}
+//                 className={`flex-1 sm:flex-none text-center px-4 py-2.5 rounded-lg text-sm font-semibold transition ${
+//                   paginaActual >= totalPaginas
+//                     ? 'bg-gray-200 text-gray-400 pointer-events-none'
+//                     : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-md'
+//                 }`}>
+//                 Siguiente
+//               </Link>
+//             </div>
+//           </div>
+//         )}
+//       </div>
+//     </main>
+//   );
+// }
 
 
 
