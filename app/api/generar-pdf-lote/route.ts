@@ -1,19 +1,14 @@
 // app/api/generar-pdf-lote/route.ts
-//
-// Genera un PDF combinado en el servidor para un lote de reportes filtrados.
-// Acepta: POST { ids: string[], titulo?: string }
-// Devuelve: application/pdf (descarga directa)
 
-import { NextRequest, NextResponse } from 'next/server';
-import { renderToBuffer }            from '@react-pdf/renderer';
-import { sql }                       from '@vercel/postgres';
-import { PDFLoteDocument }           from './pdf-lote-document';
-import React                         from 'react';
+import { NextRequest, NextResponse }         from 'next/server';
+import { renderToBuffer, Document }          from '@react-pdf/renderer';  // ← importar Document de react-pdf
+import { sql }                               from '@vercel/postgres';
+import { PDFLoteDocument }                   from './pdf-lote-document';
+import React                                 from 'react';
 
 export const runtime     = 'nodejs';
-export const maxDuration = 300; // 5 min — Vercel Pro soporta hasta 300 s para lotes grandes
+export const maxDuration = 300;
 
-// Tamaño de lote paralelo: procesar N reportes a la vez para no saturar la BD
 const CHUNK_SIZE = 20;
 
 function chunkArray<T>(arr: T[], size: number): T[][] {
@@ -25,20 +20,19 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const ids: string[] = body?.ids ?? [];
+    const ids: string[]  = body?.ids   ?? [];
     const titulo: string = body?.titulo ?? 'REPORTE COMBINADO';
 
     if (!Array.isArray(ids) || ids.length === 0) {
       return NextResponse.json({ error: 'Se requiere al menos un ID' }, { status: 400 });
     }
-    // Validar formato UUID
+
     const uuidsValidos = ids.filter(id => /^[0-9a-f-]{36}$/i.test(id));
     if (uuidsValidos.length === 0) {
       return NextResponse.json({ error: 'IDs inválidos' }, { status: 400 });
     }
 
-    // ── 1. Leer reportes en lotes paralelos (no saturar la BD) ──────────
-    const chunks   = chunkArray(uuidsValidos, CHUNK_SIZE);
+    const chunks     = chunkArray(uuidsValidos, CHUNK_SIZE);
     const allResults: Array<{ reporte: any; checklist: any[] }> = [];
 
     for (const chunk of chunks) {
@@ -58,7 +52,6 @@ export async function POST(req: NextRequest) {
         )
       );
 
-      // Procesar cada chunk y acumular
       for (const [rRes, evRes] of chunkResults) {
         if (rRes.rows.length === 0) continue;
         const row = rRes.rows[0];
@@ -92,18 +85,18 @@ export async function POST(req: NextRequest) {
           checklist,
         });
       }
-    } // fin loop de chunks
+    }
 
-    const reportes = allResults;
-
-    if (reportes.length === 0) {
+    if (allResults.length === 0) {
       return NextResponse.json({ error: 'No se encontraron reportes' }, { status: 404 });
     }
 
-    // ── 3. Generar PDF en servidor ──────────────────────────────────────
-    const buffer = await renderToBuffer(
-      React.createElement(PDFLoteDocument, { reportes, titulo })
-    );
+    // ── Generar PDF ─────────────────────────────────────────────────────
+// ── Generar PDF ─────────────────────────────────────────────────────
+const buffer = await renderToBuffer(
+  React.createElement(PDFLoteDocument, { reportes: allResults, titulo }) as any
+);
+
     const uint8 = new Uint8Array(buffer);
     const folio = `LOTE-${new Date().toISOString().slice(0, 10)}-${Math.floor(Math.random() * 900 + 100)}`;
 
