@@ -1,12 +1,13 @@
+
 'use client'
 
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import { useEffect, useMemo } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import { RotateCw } from 'lucide-react' // Opcional: Icono de actualización
 import { Reporte, GeoRefPin } from './types'
 
-// Cache de iconos para rendimiento móvil
 const iconCache = new Map<string, L.DivIcon>();
 const getIcon = (color: string, label: string) => {
   const key = `${color}-${label}`;
@@ -27,7 +28,40 @@ const getIcon = (color: string, label: string) => {
   return iconCache.get(key)!;
 };
 
-// Controlador de cámara (Auto-ajuste)
+// 1. Componente del Botón de Actualización
+function RefreshButton({ points }: { points: [number, number][] }) {
+  const map = useMap();
+
+  const handleRefresh = () => {
+    if (points.length > 0) {
+      const bounds = L.latLngBounds(points);
+      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 18 });
+    }
+  };
+
+  return (
+    <div className="leaflet-top leaflet-right" style={{ marginTop: '80px', marginRight: '10px' }}>
+      <div className="leaflet-control leaflet-bar">
+        <button
+          onClick={handleRefresh}
+          className="bg-white hover:bg-gray-50 flex items-center justify-center transition-colors"
+          title="Actualizar vista"
+          style={{ 
+            width: '34px', 
+            height: '34px', 
+            border: 'none', 
+            cursor: 'pointer',
+            borderRadius: '4px',
+            backgroundColor: 'white' 
+          }}
+        >
+          <RotateCw size={18} className="text-slate-600" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ChangeView({ points }: { points: [number, number][] }) {
   const map = useMap();
   useEffect(() => {
@@ -46,42 +80,153 @@ export default function LeafletMap({ gps, reportes, georefPins = [] }: {
 }) {
   const allCoords = useMemo(() => {
     const coords: [number, number][] = [];
-    georefPins.forEach(p => coords.push([parseFloat(p.lat), parseFloat(p.lon)]));
+    georefPins.forEach(p => {
+      if (p.lat && p.lon) coords.push([parseFloat(p.lat), parseFloat(p.lon)]);
+    });
     reportes.forEach(r => coords.push([r.latitud, r.longitud]));
-    if (coords.length === 0 && gps.lat && gps.lon) coords.push([parseFloat(gps.lat), parseFloat(gps.lon)]);
+    if (coords.length === 0 && gps.lat && gps.lon) {
+      coords.push([parseFloat(gps.lat), parseFloat(gps.lon)]);
+    }
     return coords;
   }, [reportes, georefPins, gps]);
 
   const defaultCenter: [number, number] = allCoords[0] || [16.8637, -99.8869];
 
   return (
-    <MapContainer
-      center={defaultCenter}
-      zoom={16}
-      style={{ height: '100%', width: '100%' }}
-      preferCanvas={true} // 🚀 CRÍTICO PARA MÓVILES
-    >
-      <TileLayer url="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}" />
-      <ChangeView points={allCoords} />
+    <div className="relative w-full h-full">
+      <MapContainer
+        center={defaultCenter}
+        zoom={16}
+        style={{ height: '100%', width: '100%' }}
+        preferCanvas={true}
+      >
+        <TileLayer url="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}" />
+        
+        {/* Lógica de auto-ajuste inicial */}
+        <ChangeView points={allCoords} />
+        
+        {/* Botón para actualizar la vista manualmente */}
+        <RefreshButton points={allCoords} />
 
-      {georefPins.map((pin, i) => (
-        <Marker 
-          key={`ev-${i}`} 
-          position={[parseFloat(pin.lat), parseFloat(pin.lon)]}
-          icon={getIcon(pin.cumple === 'SI' ? '#10b981' : pin.cumple === 'NO' ? '#ef4444' : '#f59e0b', pin.label)}
-        >
-          <Popup>{pin.pregunta}</Popup>
-        </Marker>
-      ))}
+        {georefPins.map((pin, i) => (
+          <Marker 
+            key={`ev-${i}`} 
+            position={[parseFloat(pin.lat), parseFloat(pin.lon)]}
+            icon={getIcon(pin.cumple === 'SI' ? '#10b981' : pin.cumple === 'NO' ? '#ef4444' : '#f59e0b', pin.label)}
+          >
+            <Popup>{pin.pregunta}</Popup>
+          </Marker>
+        ))}
 
-      {reportes.map(r => (
-        <Marker key={r.id} position={[r.latitud, r.longitud]} icon={getIcon('#6366f1', '◉')}>
-          <Popup>{r.folio}</Popup>
-        </Marker>
-      ))}
-    </MapContainer>
+        {reportes.map(r => (
+          <Marker key={r.id} position={[r.latitud, r.longitud]} icon={getIcon('#6366f1', '◉')}>
+            <Popup>{r.folio}</Popup>
+          </Marker>
+        ))}
+      </MapContainer>
+    </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// 'use client'
+
+// import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
+// import { useEffect, useMemo } from 'react'
+// import L from 'leaflet'
+// import 'leaflet/dist/leaflet.css'
+// import { Reporte, GeoRefPin } from './types'
+
+// // Cache de iconos para rendimiento móvil
+// const iconCache = new Map<string, L.DivIcon>();
+// const getIcon = (color: string, label: string) => {
+//   const key = `${color}-${label}`;
+//   if (!iconCache.has(key)) {
+//     iconCache.set(key, L.divIcon({
+//       className: 'bg-transparent',
+//       html: `<div style="filter:drop-shadow(0 2px 2px rgba(0,0,0,0.3))">
+//               <svg viewBox="0 0 32 42" width="30" height="40">
+//                 <path d="M16 0 C7.16 0 0 7.16 0 16 C0 27 16 42 16 42 C16 42 32 27 32 16 C32 7.16 24.84 0 16 0Z" fill="${color}" stroke="white" stroke-width="1.5"/>
+//                 <circle cx="16" cy="16" r="8" fill="white" opacity="0.9"/>
+//                 <text x="16" y="21" text-anchor="middle" font-family="sans-serif" font-size="${label.length > 2 ? '7' : '10'}" font-weight="bold" fill="${color}">${label}</text>
+//               </svg>
+//              </div>`,
+//       iconSize: [30, 40],
+//       iconAnchor: [15, 40],
+//     }));
+//   }
+//   return iconCache.get(key)!;
+// };
+
+// // Controlador de cámara (Auto-ajuste)
+// function ChangeView({ points }: { points: [number, number][] }) {
+//   const map = useMap();
+//   useEffect(() => {
+//     if (points.length > 0) {
+//       const bounds = L.latLngBounds(points);
+//       map.fitBounds(bounds, { padding: [40, 40], maxZoom: 18 });
+//     }
+//   }, [points, map]);
+//   return null;
+// }
+
+// export default function LeafletMap({ gps, reportes, georefPins = [] }: {
+//   gps: { lat: string | null; lon: string | null },
+//   reportes: Reporte[],
+//   georefPins?: GeoRefPin[]
+// }) {
+//   const allCoords = useMemo(() => {
+//     const coords: [number, number][] = [];
+//     georefPins.forEach(p => coords.push([parseFloat(p.lat), parseFloat(p.lon)]));
+//     reportes.forEach(r => coords.push([r.latitud, r.longitud]));
+//     if (coords.length === 0 && gps.lat && gps.lon) coords.push([parseFloat(gps.lat), parseFloat(gps.lon)]);
+//     return coords;
+//   }, [reportes, georefPins, gps]);
+
+//   const defaultCenter: [number, number] = allCoords[0] || [16.8637, -99.8869];
+
+//   return (
+//     <MapContainer
+//       center={defaultCenter}
+//       zoom={16}
+//       style={{ height: '100%', width: '100%' }}
+//       preferCanvas={true} // 🚀 CRÍTICO PARA MÓVILES
+//     >
+//       <TileLayer url="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}" />
+//       <ChangeView points={allCoords} />
+
+//       {georefPins.map((pin, i) => (
+//         <Marker 
+//           key={`ev-${i}`} 
+//           position={[parseFloat(pin.lat), parseFloat(pin.lon)]}
+//           icon={getIcon(pin.cumple === 'SI' ? '#10b981' : pin.cumple === 'NO' ? '#ef4444' : '#f59e0b', pin.label)}
+//         >
+//           <Popup>{pin.pregunta}</Popup>
+//         </Marker>
+//       ))}
+
+//       {reportes.map(r => (
+//         <Marker key={r.id} position={[r.latitud, r.longitud]} icon={getIcon('#6366f1', '◉')}>
+//           <Popup>{r.folio}</Popup>
+//         </Marker>
+//       ))}
+//     </MapContainer>
+//   );
+// }
 
 
 

@@ -11,6 +11,7 @@ import { BsTrash3Fill } from "react-icons/bs";
 import { GrMap } from "react-icons/gr";
 import { BiChair } from "react-icons/bi";
 import { GiFruitTree, GiBroom, GiStreetLight } from "react-icons/gi";
+import { Orbit } from "lucide-react"
 
 type LinkItem = {
   name: string;
@@ -26,6 +27,8 @@ const links: LinkItem[] = [
   // { name: 'Limpieza Urbana',    href: '/dashboard/Limpieza_Urbana',     icon: BsTrash3Fill },
   // { name: 'Mobiliario Urbano',  href: '/dashboard/Mobiliario_Urbano',   icon: BiChair },
   { name: 'Pineo General',  href: '/dashboard/PineoA',   icon: GiStreetLight },
+  { name: 'Vista 360',  href: '/dashboard/Visor360',   icon: Orbit},
+
   // { name: 'Vehículo',           href: '/dashboard/vehiculo',            icon: Car       },
   { name: 'Historial',          href: '/dashboard/Historial',           icon: Clock     },
 ];
