@@ -1,24 +1,12 @@
 // app/dashboard/PineoA/page.tsx
 import FormularioAlumbrado from './pineo';
 import { obtenerReporteConEvidencias } from '@/app/lib/actions';
+import sql from '@/app/lib/db'; // Importamos la conexión de Supabase
 
 // ── Reportes para el selector del mapa (sin fotos, solo metadatos) ─────────
 async function getReportes() {
   try {
-    const { neon, neonConfig } = await import('@neondatabase/serverless');
-    neonConfig.fetchConnectionCache = false;
-
-    const connectionString =
-      process.env.POSTGRES_URL ??
-      process.env.DATABASE_URL ??
-      process.env.NEON_DATABASE_URL;
-
-    if (!connectionString) {
-      console.error('[PineoA] Variable de entorno de BD no encontrada');
-      return [];
-    }
-
-    const sql = neon(connectionString);
+    // Usamos la nueva conexión centralizada, ya no necesitamos neonConfig
     const rows = await sql`
       SELECT id, folio, sector, latitud::float, longitud::float
       FROM reportes_alumbrado
@@ -27,20 +15,8 @@ async function getReportes() {
     `;
     return rows;
   } catch (error) {
-    try {
-      const { sql } = await import('@vercel/postgres');
-      const { rows } = await sql`
-        SELECT id, folio, sector, latitud::float, longitud::float
-        FROM reportes_alumbrado
-        ORDER BY fecha DESC
-        LIMIT 100
-      `;
-      return rows;
-    } catch (fallbackError) {
-      console.error('[PineoA] Error al obtener reportes (neon):', error);
-      console.error('[PineoA] Error al obtener reportes (vercel):', fallbackError);
-      return [];
-    }
+    console.error('[PineoA] Error al obtener reportes con Supabase:', error);
+    return [];
   }
 }
 
@@ -86,6 +62,116 @@ export default async function Page({
     />
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// // app/dashboard/PineoA/page.tsx
+// import FormularioAlumbrado from './pineo';
+// import { obtenerReporteConEvidencias } from '@/app/lib/actions';
+
+// // ── Reportes para el selector del mapa (sin fotos, solo metadatos) ─────────
+// async function getReportes() {
+//   try {
+//     const { neon, neonConfig } = await import('@neondatabase/serverless');
+//     neonConfig.fetchConnectionCache = false;
+
+//     const connectionString =
+//       process.env.POSTGRES_URL ??
+//       process.env.DATABASE_URL ??
+//       process.env.NEON_DATABASE_URL;
+
+//     if (!connectionString) {
+//       console.error('[PineoA] Variable de entorno de BD no encontrada');
+//       return [];
+//     }
+
+//     const sql = neon(connectionString);
+//     const rows = await sql`
+//       SELECT id, folio, sector, latitud::float, longitud::float
+//       FROM reportes_alumbrado
+//       ORDER BY fecha DESC
+//       LIMIT 100
+//     `;
+//     return rows;
+//   } catch (error) {
+//     try {
+//       const { sql } = await import('@vercel/postgres');
+//       const { rows } = await sql`
+//         SELECT id, folio, sector, latitud::float, longitud::float
+//         FROM reportes_alumbrado
+//         ORDER BY fecha DESC
+//         LIMIT 100
+//       `;
+//       return rows;
+//     } catch (fallbackError) {
+//       console.error('[PineoA] Error al obtener reportes (neon):', error);
+//       console.error('[PineoA] Error al obtener reportes (vercel):', fallbackError);
+//       return [];
+//     }
+//   }
+// }
+
+// // ── Reporte completo para edición ──────────────────────────────────────────
+// //
+// //  FIX: Antes se consultaba solo reportes_alumbrado, donde el checklist
+// //  ya no contiene fotos (se stripean al guardar para evitar payloads gigantes).
+// //  Las fotos viven en la tabla `evidencias`.
+// //
+// //  obtenerReporteConEvidencias() hace exactamente lo necesario:
+// //  1. Lee el checklist (sin fotos) de reportes_alumbrado
+// //  2. Lee todas las filas de evidencias para ese reporte
+// //  3. Rehidrata el checklist inyectando evidence[] con las fotos
+// //
+// async function getReporteParaEditar(editId: string) {
+//   if (!editId) return null;
+//   try {
+//     // Delegar completamente a la Server Action que ya maneja la rehidratación
+//     const reporte = await obtenerReporteConEvidencias(editId);
+//     return reporte;
+//   } catch (error) {
+//     console.error('[PineoA] Error al obtener reporte para editar:', error);
+//     return null;
+//   }
+// }
+
+// export default async function Page({
+//   searchParams,
+// }: {
+//   searchParams: Promise<{ editId?: string }>;
+// }) {
+//   const { editId } = await searchParams;
+
+//   const [reportes, reporteParaEditar] = await Promise.all([
+//     getReportes(),
+//     editId ? getReporteParaEditar(editId) : Promise.resolve(null),
+//   ]);
+
+//   return (
+//     <FormularioAlumbrado
+//       reportesIniciales={reportes as any[]}
+//       reporteParaEditar={reporteParaEditar}
+//     />
+//   );
+// }
 
 
 

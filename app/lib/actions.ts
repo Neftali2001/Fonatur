@@ -1,6 +1,6 @@
 'use server';
 
-import { sql } from '@vercel/postgres';
+import sql from '@/app/lib/db'; // <--- Cambiado a tu conexión de Supabase/Postgres.js
 import { revalidatePath } from 'next/cache';
 
 // ── Tipos ──────────────────────────────────────────────────────────────────
@@ -32,16 +32,16 @@ interface ChecklistItem {
 }
 
 interface FormData {
-  sector:            string;
-  Tramo:             string;
-  accesoPublico?:    string;
+  sector:             string;
+  Tramo:              string;
+  accesoPublico?:     string;
   tipoMantenimiento: string;
-  categoria:         string;
-  subTipo?:          string;
-  [key: string]:     any;
+  categoria:          string;
+  subTipo?:           string;
+  [key: string]:      any;
 }
 
-// ── Helper: normalizar evidencias (modelo nuevo y viejo) ───────────────────
+// ── Helpers ────────────────────────────────────────────────────────────────
 function getEvidenceList(item: ChecklistItem): EvidenceEntry[] {
   if (Array.isArray(item.evidence) && item.evidence.length > 0) {
     return item.evidence.filter(e => e.observation || e.geoRef || e.photo);
@@ -51,7 +51,6 @@ function getEvidenceList(item: ChecklistItem): EvidenceEntry[] {
   return [{ id: 0, observation: item.observacion || '', geoRef: item.geoRef ?? null, photo: null }];
 }
 
-// ── Helper: generar folio ──────────────────────────────────────────────────
 function generarFolio(categoria: string): string {
   const prefix = categoria.slice(0, 3).toUpperCase().replace(/\s/g, '');
   const fecha  = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -59,18 +58,9 @@ function generarFolio(categoria: string): string {
   return `${prefix}-${fecha}-${rand}`;
 }
 
-/**
- * FIX CRÍTICO: Elimina los datos de foto (base64) del checklist antes de
- * persistirlo como JSONB. Las fotos solo se almacenan en la tabla `evidencias`.
- *
- * Sin este paso, una sola foto (~300 KB en base64) multiplicada por N ítems
- * puede superar los límites de parámetro de Vercel Postgres (~10 MB) y además
- * duplicar el almacenamiento innecesariamente.
- */
 function stripPhotosFromChecklist(checklist: ChecklistItem[]): ChecklistItem[] {
   return checklist.map(item => ({
     ...item,
-    // Eliminar foto de cada entrada de evidencia en el JSONB
     evidence: item.evidence?.map(ev => ({ ...ev, photo: null })) ?? [],
   }));
 }
@@ -86,8 +76,6 @@ export async function crearReporte(
 ): Promise<string> {
 
   const folio = generarFolio(formData.categoria);
-
-  // ── FIX: guardar JSONB sin fotos (evita payload gigante y duplicados) ──
   const checklistSinFotos = stripPhotosFromChecklist(checklist);
 
   const result = await sql`
@@ -113,11 +101,8 @@ export async function crearReporte(
     RETURNING id
   `;
 
-  const reporteId: string = result.rows[0].id;
-
-  // ── Insertar evidencias con fotos (aquí sí se guardan) ──
+  const reporteId = result[0].id; // <--- Sin .rows
   await insertarEvidencias(reporteId, checklist);
-
   return reporteId;
 }
 
@@ -132,7 +117,6 @@ export async function actualizarReporte(
   fotos: { [key: string]: string | null }
 ): Promise<string> {
 
-  // ── FIX: guardar JSONB sin fotos ──
   const checklistSinFotos = stripPhotosFromChecklist(checklist);
 
   await sql`
@@ -150,30 +134,17 @@ export async function actualizarReporte(
     WHERE id = ${id}::uuid
   `;
 
-  // ── Reemplazar evidencias (con fotos) ──
   await sql`DELETE FROM evidencias WHERE reporte_id = ${id}::uuid`;
   await insertarEvidencias(id, checklist);
-
   return id;
 }
 
-// ══════════════════════════════════════════════════════════════════════════
-//  HELPER: insertar filas en evidencias
-//  Las fotos se guardan aquí — es el único lugar donde persisten.
-// ══════════════════════════════════════════════════════════════════════════
 async function insertarEvidencias(reporteId: string, checklist: ChecklistItem[]) {
   for (const item of checklist) {
     const evidences = getEvidenceList(item);
     for (let i = 0; i < evidences.length; i++) {
       const ev = evidences[i];
-
-      // Validar que la foto sea un data URL válido antes de insertar
-      const fotoValida =
-        ev.photo &&
-        typeof ev.photo === 'string' &&
-        ev.photo.startsWith('data:image/')
-          ? ev.photo
-          : null;
+      const fotoValida = ev.photo?.startsWith('data:image/') ? ev.photo : null;
 
       await sql`
         INSERT INTO evidencias (
@@ -200,51 +171,37 @@ async function insertarEvidencias(reporteId: string, checklist: ChecklistItem[])
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-//  OBTENER REPORTES (Historial)
+//  HISTORIAL / OBTENER REPORTES
 // ══════════════════════════════════════════════════════════════════════════
-export async function obtenerReportes(filtros?: {
-  categoria?: string;
-  sector?:    string;
-}) {
-  const rows = await sql`
-    SELECT
-      id, folio, categoria, sub_tipo,
-      sector, tramo, acceso_publico,
-      tipo_mantenimiento,
-      latitud, longitud,
-      fecha
+export async function obtenerReportes() {
+  const result = await sql`
+    SELECT id, folio, categoria, sub_tipo, sector, tramo, acceso_publico,
+           tipo_mantenimiento, latitud, longitud, fecha
     FROM reportes_alumbrado
     ORDER BY fecha DESC
     LIMIT 200
   `;
-  return rows.rows;
+  return result; // <--- Sin .rows
 }
 
-// ══════════════════════════════════════════════════════════════════════════
-//  OBTENER REPORTE + EVIDENCIAS (para editar)
-//  Rehidrata el checklist con las fotos desde la tabla `evidencias`.
-// ══════════════════════════════════════════════════════════════════════════
 export async function obtenerReporteConEvidencias(id: string) {
-  const [reporte, evidencias] = await Promise.all([
+  const [reporteResult, evidenciasResult] = await Promise.all([
     sql`SELECT * FROM reportes_alumbrado WHERE id = ${id}::uuid`,
-    sql`SELECT * FROM evidencias WHERE reporte_id = ${id}::uuid
-        ORDER BY item_id, evidencia_num`,
+    sql`SELECT * FROM evidencias WHERE reporte_id = ${id}::uuid ORDER BY item_id, evidencia_num`,
   ]);
 
-  if (reporte.rows.length === 0) return null;
+  if (reporteResult.length === 0) return null;
 
-  const r = reporte.rows[0];
+  const r = reporteResult[0];
   const checklistBase: ChecklistItem[] = r.checklist ?? [];
-
-  // Agrupar evidencias por item_id
   const evMap = new Map<number, EvidenceEntry[]>();
-  for (const ev of evidencias.rows) {
+
+  for (const ev of evidenciasResult) {
     if (!evMap.has(ev.item_id)) evMap.set(ev.item_id, []);
     evMap.get(ev.item_id)!.push({
       id:          ev.id,
-      observation: ev.observacion  ?? '',
-      // ── Rehidratar foto desde tabla evidencias (no viene en el JSONB) ──
-      photo:       ev.foto         ?? null,
+      observation: ev.observacion ?? '',
+      photo:       ev.foto        ?? null,
       geoRef: ev.lat ? {
         lat:       String(ev.lat),
         lon:       String(ev.lon),
@@ -254,7 +211,6 @@ export async function obtenerReporteConEvidencias(id: string) {
     });
   }
 
-  // Inyectar evidence[] en cada ítem del checklist
   const checklistHidratado = checklistBase.map((item: ChecklistItem) => ({
     ...item,
     evidence: evMap.get(item.id) ?? [{ id: Date.now(), observation: '', geoRef: null, photo: null }],
@@ -263,73 +219,389 @@ export async function obtenerReporteConEvidencias(id: string) {
   return { ...r, checklist: checklistHidratado };
 }
 
-// ══════════════════════════════════════════════════════════════════════════
-//  ELIMINAR REPORTE
-// ══════════════════════════════════════════════════════════════════════════
 export async function eliminarReporte(id: string): Promise<void> {
   await sql`DELETE FROM reportes_alumbrado WHERE id = ${id}::uuid`;
-  // ON DELETE CASCADE elimina las evidencias automáticamente
   revalidatePath('/dashboard/Historial');
 }
 
-
-// ══════════════════════════════════════════════════════════════════════════
-//  OBTENER REPORTE POR ID (Solo base)
-// ══════════════════════════════════════════════════════════════════════════
-export async function obtenerReportePorId(id: string) {
-  const result = await sql`
-    SELECT * FROM reportes_alumbrado
-    WHERE id = ${id}::uuid
-  `;
-  if (result.rows.length === 0) return null;
-  return result.rows[0];
-}
-
-// ══════════════════════════════════════════════════════════════════════════
-//  OBTENER FECHAS CON CONTEO (para el borrador por fecha)
-//  Devuelve cada fecha única (en zona America/Mexico_City) con cuántos
-//  reportes se crearon ese día, ordenadas de más reciente a más antigua.
-// ══════════════════════════════════════════════════════════════════════════
-export async function obtenerFechasConConteo(): Promise<
-  { fecha: string; total: number }[]
-> {
+export async function obtenerFechasConConteo(): Promise<{ fecha: string; total: number }[]> {
   const result = await sql`
     SELECT
-      TO_CHAR(
-        fecha AT TIME ZONE 'America/Mexico_City',
-        'YYYY-MM-DD'
-      )                       AS fecha,
-      COUNT(*)::int           AS total
+      TO_CHAR(fecha AT TIME ZONE 'UTC' AT TIME ZONE 'America/Mexico_City', 'YYYY-MM-DD') AS fecha,
+      COUNT(*)::int AS total
     FROM reportes_alumbrado
     GROUP BY 1
     ORDER BY 1 DESC
   `;
-  return result.rows as { fecha: string; total: number }[];
+  return result as unknown as { fecha: string; total: number }[];
 }
 
-// ══════════════════════════════════════════════════════════════════════════
-//  ELIMINAR REPORTES POR FECHA
-//  Borra todos los reportes (y sus evidencias por CASCADE) cuya fecha,
-//  convertida a la zona horaria local, coincida con el día indicado.
-//  dateStr: "YYYY-MM-DD"
-// ══════════════════════════════════════════════════════════════════════════
 export async function eliminarReportesPorFecha(dateStr: string): Promise<number> {
-  // Validación básica del formato para evitar inyección
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-    throw new Error('Formato de fecha inválido. Se esperaba YYYY-MM-DD.');
+    throw new Error('Formato de fecha inválido.');
   }
 
   const result = await sql`
     DELETE FROM reportes_alumbrado
-    WHERE TO_CHAR(
-      fecha AT TIME ZONE 'America/Mexico_City',
-      'YYYY-MM-DD'
-    ) = ${dateStr}
+    WHERE TO_CHAR(fecha AT TIME ZONE 'UTC' AT TIME ZONE 'America/Mexico_City', 'YYYY-MM-DD') = ${dateStr}
   `;
 
   revalidatePath('/dashboard/Historial');
-  return result.rowCount ?? 0;
+  return result.count; // <--- En postgres.js se usa .count para filas afectadas
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// 'use server';
+
+// import { sql } from '@vercel/postgres';
+// import { revalidatePath } from 'next/cache';
+
+// // ── Tipos ──────────────────────────────────────────────────────────────────
+// interface GpsCoords {
+//   lat: string | null;
+//   lon: string | null;
+//   precision: string;
+// }
+
+// interface GeoRef {
+//   lat: string; lon: string; precision: string; timestamp: string;
+// }
+
+// interface EvidenceEntry {
+//   id: number;
+//   observation: string;
+//   geoRef: GeoRef | null;
+//   photo: string | null;
+// }
+
+// interface ChecklistItem {
+//   id: number;
+//   seccion?: string;
+//   pregunta: string;
+//   respuesta: string;
+//   observacion: string;
+//   geoRef?: GeoRef | null;
+//   evidence?: EvidenceEntry[];
+// }
+
+// interface FormData {
+//   sector:            string;
+//   Tramo:             string;
+//   accesoPublico?:    string;
+//   tipoMantenimiento: string;
+//   categoria:         string;
+//   subTipo?:          string;
+//   [key: string]:     any;
+// }
+
+// // ── Helper: normalizar evidencias (modelo nuevo y viejo) ───────────────────
+// function getEvidenceList(item: ChecklistItem): EvidenceEntry[] {
+//   if (Array.isArray(item.evidence) && item.evidence.length > 0) {
+//     return item.evidence.filter(e => e.observation || e.geoRef || e.photo);
+//   }
+//   const tieneAlgo = !!(item.observacion?.trim() || item.geoRef);
+//   if (!tieneAlgo) return [];
+//   return [{ id: 0, observation: item.observacion || '', geoRef: item.geoRef ?? null, photo: null }];
+// }
+
+// // ── Helper: generar folio ──────────────────────────────────────────────────
+// function generarFolio(categoria: string): string {
+//   const prefix = categoria.slice(0, 3).toUpperCase().replace(/\s/g, '');
+//   const fecha  = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+//   const rand   = Math.floor(Math.random() * 900 + 100);
+//   return `${prefix}-${fecha}-${rand}`;
+// }
+
+// /**
+//  * FIX CRÍTICO: Elimina los datos de foto (base64) del checklist antes de
+//  * persistirlo como JSONB. Las fotos solo se almacenan en la tabla `evidencias`.
+//  *
+//  * Sin este paso, una sola foto (~300 KB en base64) multiplicada por N ítems
+//  * puede superar los límites de parámetro de Vercel Postgres (~10 MB) y además
+//  * duplicar el almacenamiento innecesariamente.
+//  */
+// function stripPhotosFromChecklist(checklist: ChecklistItem[]): ChecklistItem[] {
+//   return checklist.map(item => ({
+//     ...item,
+//     // Eliminar foto de cada entrada de evidencia en el JSONB
+//     evidence: item.evidence?.map(ev => ({ ...ev, photo: null })) ?? [],
+//   }));
+// }
+
+// // ══════════════════════════════════════════════════════════════════════════
+// //  CREAR REPORTE
+// // ══════════════════════════════════════════════════════════════════════════
+// export async function crearReporte(
+//   formData: FormData,
+//   checklist: ChecklistItem[],
+//   gps: GpsCoords,
+//   fotos: { [key: string]: string | null }
+// ): Promise<string> {
+
+//   const folio = generarFolio(formData.categoria);
+
+//   // ── FIX: guardar JSONB sin fotos (evita payload gigante y duplicados) ──
+//   const checklistSinFotos = stripPhotosFromChecklist(checklist);
+
+//   const result = await sql`
+//     INSERT INTO reportes_alumbrado (
+//       folio,
+//       sector, tramo, acceso_publico,
+//       tipo_mantenimiento, categoria, sub_tipo,
+//       latitud, longitud,
+//       checklist, fotos
+//     ) VALUES (
+//       ${folio},
+//       ${formData.sector           ?? null},
+//       ${formData.Tramo            ?? null},
+//       ${formData.accesoPublico    ?? null},
+//       ${formData.tipoMantenimiento ?? null},
+//       ${formData.categoria        ?? 'ALUMBRADO PÚBLICO'},
+//       ${formData.subTipo          ?? null},
+//       ${gps.lat ? parseFloat(gps.lat) : null},
+//       ${gps.lon ? parseFloat(gps.lon) : null},
+//       ${JSON.stringify(checklistSinFotos)}::jsonb,
+//       ${JSON.stringify(fotos)}::jsonb
+//     )
+//     RETURNING id
+//   `;
+
+//   const reporteId: string = result.rows[0].id;
+
+//   // ── Insertar evidencias con fotos (aquí sí se guardan) ──
+//   await insertarEvidencias(reporteId, checklist);
+
+//   return reporteId;
+// }
+
+// // ══════════════════════════════════════════════════════════════════════════
+// //  ACTUALIZAR REPORTE
+// // ══════════════════════════════════════════════════════════════════════════
+// export async function actualizarReporte(
+//   id: string,
+//   formData: FormData,
+//   checklist: ChecklistItem[],
+//   gps: GpsCoords,
+//   fotos: { [key: string]: string | null }
+// ): Promise<string> {
+
+//   // ── FIX: guardar JSONB sin fotos ──
+//   const checklistSinFotos = stripPhotosFromChecklist(checklist);
+
+//   await sql`
+//     UPDATE reportes_alumbrado SET
+//       sector             = ${formData.sector           ?? null},
+//       tramo              = ${formData.Tramo            ?? null},
+//       acceso_publico     = ${formData.accesoPublico    ?? null},
+//       tipo_mantenimiento = ${formData.tipoMantenimiento ?? null},
+//       categoria          = ${formData.categoria        ?? null},
+//       sub_tipo           = ${formData.subTipo          ?? null},
+//       latitud            = ${gps.lat ? parseFloat(gps.lat) : null},
+//       longitud           = ${gps.lon ? parseFloat(gps.lon) : null},
+//       checklist          = ${JSON.stringify(checklistSinFotos)}::jsonb,
+//       fotos              = ${JSON.stringify(fotos)}::jsonb
+//     WHERE id = ${id}::uuid
+//   `;
+
+//   // ── Reemplazar evidencias (con fotos) ──
+//   await sql`DELETE FROM evidencias WHERE reporte_id = ${id}::uuid`;
+//   await insertarEvidencias(id, checklist);
+
+//   return id;
+// }
+
+// // ══════════════════════════════════════════════════════════════════════════
+// //  HELPER: insertar filas en evidencias
+// //  Las fotos se guardan aquí — es el único lugar donde persisten.
+// // ══════════════════════════════════════════════════════════════════════════
+// async function insertarEvidencias(reporteId: string, checklist: ChecklistItem[]) {
+//   for (const item of checklist) {
+//     const evidences = getEvidenceList(item);
+//     for (let i = 0; i < evidences.length; i++) {
+//       const ev = evidences[i];
+
+//       // Validar que la foto sea un data URL válido antes de insertar
+//       const fotoValida =
+//         ev.photo &&
+//         typeof ev.photo === 'string' &&
+//         ev.photo.startsWith('data:image/')
+//           ? ev.photo
+//           : null;
+
+//       await sql`
+//         INSERT INTO evidencias (
+//           reporte_id, item_id, item_pregunta, item_seccion,
+//           evidencia_num, observacion,
+//           lat, lon, precision_gps, timestamp_gps,
+//           foto
+//         ) VALUES (
+//           ${reporteId}::uuid,
+//           ${item.id},
+//           ${item.pregunta},
+//           ${item.seccion ?? null},
+//           ${i + 1},
+//           ${ev.observation || null},
+//           ${ev.geoRef?.lat ? parseFloat(ev.geoRef.lat) : null},
+//           ${ev.geoRef?.lon ? parseFloat(ev.geoRef.lon) : null},
+//           ${ev.geoRef?.precision ?? null},
+//           ${ev.geoRef?.timestamp ?? null},
+//           ${fotoValida}
+//         )
+//       `;
+//     }
+//   }
+// }
+
+// // ══════════════════════════════════════════════════════════════════════════
+// //  OBTENER REPORTES (Historial)
+// // ══════════════════════════════════════════════════════════════════════════
+// export async function obtenerReportes(filtros?: {
+//   categoria?: string;
+//   sector?:    string;
+// }) {
+//   const rows = await sql`
+//     SELECT
+//       id, folio, categoria, sub_tipo,
+//       sector, tramo, acceso_publico,
+//       tipo_mantenimiento,
+//       latitud, longitud,
+//       fecha
+//     FROM reportes_alumbrado
+//     ORDER BY fecha DESC
+//     LIMIT 200
+//   `;
+//   return rows.rows;
+// }
+
+// // ══════════════════════════════════════════════════════════════════════════
+// //  OBTENER REPORTE + EVIDENCIAS (para editar)
+// //  Rehidrata el checklist con las fotos desde la tabla `evidencias`.
+// // ══════════════════════════════════════════════════════════════════════════
+// export async function obtenerReporteConEvidencias(id: string) {
+//   const [reporte, evidencias] = await Promise.all([
+//     sql`SELECT * FROM reportes_alumbrado WHERE id = ${id}::uuid`,
+//     sql`SELECT * FROM evidencias WHERE reporte_id = ${id}::uuid
+//         ORDER BY item_id, evidencia_num`,
+//   ]);
+
+//   if (reporte.rows.length === 0) return null;
+
+//   const r = reporte.rows[0];
+//   const checklistBase: ChecklistItem[] = r.checklist ?? [];
+
+//   // Agrupar evidencias por item_id
+//   const evMap = new Map<number, EvidenceEntry[]>();
+//   for (const ev of evidencias.rows) {
+//     if (!evMap.has(ev.item_id)) evMap.set(ev.item_id, []);
+//     evMap.get(ev.item_id)!.push({
+//       id:          ev.id,
+//       observation: ev.observacion  ?? '',
+//       // ── Rehidratar foto desde tabla evidencias (no viene en el JSONB) ──
+//       photo:       ev.foto         ?? null,
+//       geoRef: ev.lat ? {
+//         lat:       String(ev.lat),
+//         lon:       String(ev.lon),
+//         precision: ev.precision_gps ?? '--',
+//         timestamp: ev.timestamp_gps ?? '',
+//       } : null,
+//     });
+//   }
+
+//   // Inyectar evidence[] en cada ítem del checklist
+//   const checklistHidratado = checklistBase.map((item: ChecklistItem) => ({
+//     ...item,
+//     evidence: evMap.get(item.id) ?? [{ id: Date.now(), observation: '', geoRef: null, photo: null }],
+//   }));
+
+//   return { ...r, checklist: checklistHidratado };
+// }
+
+// // ══════════════════════════════════════════════════════════════════════════
+// //  ELIMINAR REPORTE
+// // ══════════════════════════════════════════════════════════════════════════
+// export async function eliminarReporte(id: string): Promise<void> {
+//   await sql`DELETE FROM reportes_alumbrado WHERE id = ${id}::uuid`;
+//   // ON DELETE CASCADE elimina las evidencias automáticamente
+//   revalidatePath('/dashboard/Historial');
+// }
+
+
+// // ══════════════════════════════════════════════════════════════════════════
+// //  OBTENER REPORTE POR ID (Solo base)
+// // ══════════════════════════════════════════════════════════════════════════
+// export async function obtenerReportePorId(id: string) {
+//   const result = await sql`
+//     SELECT * FROM reportes_alumbrado
+//     WHERE id = ${id}::uuid
+//   `;
+//   if (result.rows.length === 0) return null;
+//   return result.rows[0];
+// }
+
+// // ══════════════════════════════════════════════════════════════════════════
+// //  OBTENER FECHAS CON CONTEO (para el borrador por fecha)
+// //  Devuelve cada fecha única (en zona America/Mexico_City) con cuántos
+// //  reportes se crearon ese día, ordenadas de más reciente a más antigua.
+// // ══════════════════════════════════════════════════════════════════════════
+// export async function obtenerFechasConConteo(): Promise<
+//   { fecha: string; total: number }[]
+// > {
+//   const result = await sql`
+//     SELECT
+//       TO_CHAR(
+//         fecha AT TIME ZONE 'America/Mexico_City',
+//         'YYYY-MM-DD'
+//       )                       AS fecha,
+//       COUNT(*)::int           AS total
+//     FROM reportes_alumbrado
+//     GROUP BY 1
+//     ORDER BY 1 DESC
+//   `;
+//   return result.rows as { fecha: string; total: number }[];
+// }
+
+// // ══════════════════════════════════════════════════════════════════════════
+// //  ELIMINAR REPORTES POR FECHA
+// //  Borra todos los reportes (y sus evidencias por CASCADE) cuya fecha,
+// //  convertida a la zona horaria local, coincida con el día indicado.
+// //  dateStr: "YYYY-MM-DD"
+// // ══════════════════════════════════════════════════════════════════════════
+// export async function eliminarReportesPorFecha(dateStr: string): Promise<number> {
+//   // Validación básica del formato para evitar inyección
+//   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+//     throw new Error('Formato de fecha inválido. Se esperaba YYYY-MM-DD.');
+//   }
+
+//   const result = await sql`
+//     DELETE FROM reportes_alumbrado
+//     WHERE TO_CHAR(
+//       fecha AT TIME ZONE 'America/Mexico_City',
+//       'YYYY-MM-DD'
+//     ) = ${dateStr}
+//   `;
+
+//   revalidatePath('/dashboard/Historial');
+//   return result.rowCount ?? 0;
+// }
 
 
 
