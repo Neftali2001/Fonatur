@@ -77,21 +77,21 @@ const WatermarkOverlay: React.FC<{ projectName: string }> = ({ projectName }) =>
       <svg
         className="absolute inset-0 w-full h-full"
         xmlns="http://www.w3.org/2000/svg"
-        style={{ opacity: 0.045 }}
+        style={{ opacity: 0.18 }}
       >
         <defs>
           <pattern
             id="wm-pattern"
             x="0" y="0"
-            width="340" height="160"
+            width="220" height="120"
             patternUnits="userSpaceOnUse"
             patternTransform="rotate(-32)"
           >
             {/* ícono esfera */}
             <text
               x="10" y="38"
-              fontFamily="monospace" fontWeight="900" fontSize="15"
-              fill="white" letterSpacing="3"
+              fontFamily="monospace" fontWeight="900" fontSize="28"
+              fill="rgba(0,0,0,0.35)" letterSpacing="3"
             >
               ◎ {wm}
             </text>
@@ -157,6 +157,26 @@ const Viewer360: React.FC<Viewer360Props> = ({
   const prevMouseRef = useRef({ x: 0, y: 0 });
   const prevTouchRef = useRef<{ x: number; y: number } | null>(null);
   const pinchDistRef = useRef<number | null>(null);
+
+
+  useEffect(() => {
+  const blockContext = (e: MouseEvent) => e.preventDefault();
+
+  const detectPrintScreen = async (e: KeyboardEvent) => {
+    if (e.key === 'PrintScreen') {
+      navigator.clipboard.writeText('');
+      alert('Captura detectada · 360° CIP ACAPULCO-COYUCA');
+    }
+  };
+
+  document.addEventListener('contextmenu', blockContext);
+  window.addEventListener('keydown', detectPrintScreen);
+
+  return () => {
+    document.removeEventListener('contextmenu', blockContext);
+    window.removeEventListener('keydown', detectPrintScreen);
+  };
+}, []);
 
   useEffect(() => { stateRef.current.fov     = fov;       }, [fov]);
   useEffect(() => { stateRef.current.speed   = speed;     }, [speed]);
@@ -487,7 +507,7 @@ const Viewer360: React.FC<Viewer360Props> = ({
             {/* ── Canvas wrapper ─────────────────────────────────────────── */}
             <div
               ref={wrapRef}
-              className="relative w-full bg-slate-900 overflow-hidden cursor-grab active:cursor-grabbing"
+              className="relative isolate w-full bg-slate-900 overflow-hidden cursor-grab active:cursor-grabbing"     
               style={{ aspectRatio: '16/9' }}
               onMouseDown={onMouseDown}
               onWheel={onWheel}
@@ -495,13 +515,17 @@ const Viewer360: React.FC<Viewer360Props> = ({
               onTouchMove={onTouchMove}
               onTouchEnd={onTouchEnd}
             >
-              <canvas ref={canvasRef} className="w-full h-full block" />
+              <canvas
+  ref={canvasRef}
+  className="absolute inset-0 w-full h-full block z-0"
+/>
 
-              {/* ════════════════════════════════════════════════════════════
-                  MARCA DE AGUA — siempre visible sobre el canvas.
-                  pointer-events:none → el arrastre/scroll funciona con normalidad.
-                  Al capturar pantalla (PrtSc, Snipping Tool, etc.) queda grabada.
-              ════════════════════════════════════════════════════════════ */}
+             {/* ════════════════════════════════════════════════════════════
+    MARCA DE AGUA — siempre visible sobre el canvas.
+    pointer-events:none → el arrastre/scroll funciona con normalidad.
+    Al capturar pantalla (PrtSc, Snipping Tool, etc.) queda grabada.
+════════════════════════════════════════════════════════════ */}
+
               <WatermarkOverlay projectName={projectName} />
 
               {isLoading && (
