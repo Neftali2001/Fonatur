@@ -193,7 +193,25 @@ export async function obtenerReporteConEvidencias(id: string) {
   if (reporteResult.length === 0) return null;
 
   const r = reporteResult[0];
-  const checklistBase: ChecklistItem[] = r.checklist ?? [];
+  
+  // ── CORRECCIÓN: Parseo seguro del checklist ──────────────────────────────
+  let checklistBase: ChecklistItem[] = [];
+  
+  if (Array.isArray(r.checklist)) {
+    // Ya es un arreglo válido
+    checklistBase = r.checklist;
+  } else if (typeof r.checklist === 'string') {
+    // Si viene como string JSON, intentamos parsearlo
+    try {
+      const parsed = JSON.parse(r.checklist);
+      checklistBase = Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      console.error('Error al parsear el checklist de la BD:', e);
+      checklistBase = [];
+    }
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   const evMap = new Map<number, EvidenceEntry[]>();
 
   for (const ev of evidenciasResult) {
